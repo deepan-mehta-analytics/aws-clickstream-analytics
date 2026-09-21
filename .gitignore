@@ -1,0 +1,40 @@
+# ── Agent workflow files (local-only, never tracked) ──────────
+/CLAUDE.md
+/workflow_status.md
+/workflow_status_archive.md
+
+# ── Secrets and credentials ───────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+.aws/
+
+# ── Terraform / IaC state ─────────────────────────────────────
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+terraform.tfvars
+cdk.out/
+
+# ── Local data (large / regenerable datasets) ─────────────────
+/data/*
+!/data/.gitkeep
+*.parquet
+*.csv
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# ── Editor / OS ───────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
