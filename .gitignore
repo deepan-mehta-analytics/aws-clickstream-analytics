@@ -2,6 +2,9 @@
 /CLAUDE.md
 /workflow_status.md
 /workflow_status_archive.md
+/MEMORY.md
+/feedback_*.md
+/reference_*.md
 
 # ── Secrets and credentials ───────────────────────────────────
 .env
