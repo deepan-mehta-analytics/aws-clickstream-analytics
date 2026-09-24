@@ -6,7 +6,7 @@ public-safe: no AWS account IDs, ARNs, access keys, or personal emails —
 placeholders only.
 
 ## Current phase
-Pre-Phase 0 — local folder skeleton only. Local git repo initialised (no
+Phase 0 started (2026-09-24): Free Tier research under way (G-01). Local git repo initialised (no
 remote yet), no AWS resources provisioned, no code written. The original brief is captured in
 `docs/00-initial-brief.md` and is a **non-binding draft**; every stack and
 architecture decision is to be re-researched before it is adopted (see
@@ -18,7 +18,7 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 — Research & decisions (verify Free Tier, cost, latency, data model; write ADRs) | ⏳ Pending | drives `docs/GAPS.md` |
+| 0 — Research & decisions (verify Free Tier, cost, latency, data model; write ADRs) | 🔄 In progress | G-01 docs half researched 2026-09-24 (new Free plan: up to $200 credits, 6-month account, restricted service subset); account plan and service availability still open; drives `docs/GAPS.md` |
 | 1 — Scaffolding (git repo, CI, Makefile, IaC skeleton, per-directory READMEs) | ⏳ Pending | |
 | 2 — Ingest → Bronze (streaming path to S3) | ⏳ Pending | |
 | 3 — Batch ETL → Silver (sessionization) | ⏳ Pending | |
