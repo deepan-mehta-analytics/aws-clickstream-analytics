@@ -51,9 +51,13 @@ trial terms are verified (G-07).
   planned before it is switched on.
 - Redshift trial burn has to be watched in the Redshift console or
   `SYS_SERVERLESS_USAGE`, because Budgets will not see it.
-- The claim that this mix best covers the DEA-C01 exam is **unverified**
-  until the official exam guide is fetched and mapped
-  (`docs/exam-guide-map.md`).
+- Exam coverage, checked against guide v1.1 on 2026-09-25 in
+  `docs/exam-guide-map.md`: 11 of the 120 skills (6 planned, 5 stretch)
+  depend on the streaming and Redshift window, including reading streaming
+  sources (1.1.1), loading and unloading between S3 and Redshift (2.3.1),
+  Redshift schema design (2.4.1) and Spectrum or materialized views (2.1.5).
+  A batch-only design would drop them. The window is therefore
+  load-bearing for coverage, not decoration.
 
 ## Alternatives rejected
 

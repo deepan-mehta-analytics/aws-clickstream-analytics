@@ -40,17 +40,18 @@ table with their decision, so the reasoning remains auditable.
 AWS Certified Data Engineer – Associate (DEA-C01) syllabus versus what this
 project actually demonstrates.
 
-**Not populated yet.** In the working session, fetch the current official
-exam guide first (do not fill this from memory), record its version, domain
-weights and fetch date here, then add one row per official task statement:
+**Maintained in [`exam-guide-map.md`](exam-guide-map.md)**, one row per
+official skill. It was built from exam guide version 1.1 (published
+2025-12-12), fetched 2026-09-25; re-checks are logged in
+[`exam-guide-delta.md`](exam-guide-delta.md).
 
-| § | Task statement | Module in this repo | Status |
-|---|---|---|---|
-| — | — | — | ⏳ Open |
-
-Rows with no module are the gaps. Decide for each: build it, or record it
-under Known Limitations. Likely candidates to check: governance and data
-cataloguing, orchestration, data quality, IaC, and security controls.
+Summary as of 2026-09-25: 120 skills, of which 58 are planned, 36 stretch
+and 26 not planned. The thinnest domain is 4 (Security and Governance),
+with 9 of 29 planned. The 26 "not planned" skills are candidates for
+Known Limitations, but they are not accepted yet. Promote them to §3 only
+when the owner confirms each one (for example multi-account encryption,
+AWS Organizations region controls, vector stores, SageMaker Catalog, and
+containers).
 
 ---
 
