@@ -22,14 +22,14 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 | 0 — Research & decisions (verify Free Tier, cost, latency, data model; write ADRs) | 🔄 In progress | Account confirmed on the legacy Free Tier (2026-09-24). 2026-09-25: list prices verified for Kinesis, Firehose, Redshift Serverless, S3, Lambda, Glue, Athena and Quick; `docs/cost-model.md` estimates about $1.56 per streaming demo window and about $0.15 per batch run (estimates only, nothing measured); ADR-0001 (hybrid batch baseline + bounded streaming windows, region Mumbai `ap-south-1`) **Accepted** 2026-09-25, with an annex that prices a 7-tier ladder in Mumbai (INR incl. GST) with SWOT: ≈ ₹110 one-time on trials, ₹0/month after teardown. DEA-C01 guide v1.1 mapped in `docs/exam-guide-map.md`: 8 of 120 skills shown (local run), 8 designed; 58 planned, 36 stretch, 26 not planned; drives `docs/GAPS.md` |
 | 1 — Scaffolding (git repo, CI, Makefile, IaC skeleton, per-directory READMEs) | ✅ Done (local) | Package, pinned tooling, hygiene/lint/test CI (defined, not yet run: no remote), honest Makefile, directory READMEs, root README, and the local twin pipeline (tier T0). IaC skeleton excluded, pending G-13 |
 | 2 — Ingest → Bronze (streaming path to S3) | ⏳ Pending | |
-| 3 — Batch ETL → Silver (sessionization) | ⏳ Pending | |
+| 3 — Batch ETL → Silver and Gold on AWS (Glue) | ⏳ Pending | Logic already built and tested locally (tier T0); visits come from real session IDs, not gap-based sessionization (ADR-0003) |
 | 4 — Warehouse + modelling | ⏳ Pending | |
 | 5 — BI dashboards | ⏳ Pending | |
 | 6 — Monitoring, security & cost guardrails | ⏳ Pending | |
 | 7 — Live demo window + teardown | ⏳ Pending | |
 
 ## Last commit
-See `git log` on `main` (local twin docs commit); no remote configured yet.
+`a119c04` (review fixes for the local twin) on `main`; no remote configured yet.
 
 ## Metrics
 From a **local run (tier T0)** on the full UCI file, 2026-09-25: 165,474 source clicks, 0 rejected, 165,474 Silver clicks, 24,026 visits, 5,042 one-click visits, 1 reported category mismatch (A18); browse-depth funnel 24,026 / 14,504 / 9,125 / 4,779 / 1,631. 45 tests pass. No AWS metric exists yet; none is reported until measured from a real cloud run.
