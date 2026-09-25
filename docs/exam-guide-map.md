@@ -8,7 +8,7 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 0 of 120 skills shown · 2 designed · 118 not started**
+**Coverage: 0 of 120 skills shown · 4 designed · 116 not started**
 (as of 2026-09-25; no code or cloud run exists yet).
 
 **Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
@@ -24,7 +24,7 @@ Status legend:
 - ⬜ **not started**.
 
 Plan column (from [ADR-0001](adr/0001-ingest-and-warehouse-stack.md),
-Proposed):
+Accepted 2026-09-25):
 - **Planned**: in the intended build.
 - **Stretch**: fits the design if time and cost allow.
 - **Not planned**: outside this project's scope; a Known Limitations
@@ -99,7 +99,7 @@ Proposed):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 2.1.1 | Match storage services to cost and performance needs | Planned | S3 vs Redshift vs Kinesis, per ADR-0001 | ⬜ |
+| 2.1.1 | Match storage services to cost and performance needs | Planned | S3 vs Redshift vs Kinesis: [ADR-0001](adr/0001-ingest-and-warehouse-stack.md) and its [cost-tier annex](adr/0001-hybrid-cost-tiers.md) | 🟡 |
 | 2.1.2 | Configure stores for access patterns | Planned | Redshift sort/distribution keys; S3 partitioning | ⬜ |
 | 2.1.3 | Specialised stores (vector index, key/value) | Not planned | — | ⬜ |
 | 2.1.4 | Migration tools such as Transfer Family | Not planned | — | ⬜ |
@@ -250,6 +250,6 @@ repo defines roles and policies; the owner applies them.
 | 4.5.2 | Identify PII | Not planned | Synthetic data only | ⬜ |
 | 4.5.3 | Block replication to disallowed Regions | Not planned | Needs AWS Organizations (owner-only area) | ⬜ |
 | 4.5.4 | View account configuration changes | Not planned | — | ⬜ |
-| 4.5.5 | Data sovereignty | Stretch | Region decision record (G-14) | ⬜ |
+| 4.5.5 | Data sovereignty | Stretch | Mumbai region choice for data residency in [ADR-0001](adr/0001-ingest-and-warehouse-stack.md) | 🟡 |
 | 4.5.6 | Access via SageMaker Catalog projects | Not planned | — | ⬜ |
 | 4.5.7 | Governance frameworks and sharing patterns | Stretch | Concept note | ⬜ |

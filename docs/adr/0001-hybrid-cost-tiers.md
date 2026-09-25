@@ -1,7 +1,8 @@
 # ADR-0001 Annex: Hybrid Cost Tiers, SWOT and Move Analysis
 
 Supporting analysis for [ADR-0001](0001-ingest-and-warehouse-stack.md)
-(Proposed). It answers one question:
+(Accepted 2026-09-25 with Mumbai and the recommended line in §6). It
+answers one question:
 
 > How far up the hybrid design can this project go, in small priced steps,
 > and still publish a release that carries **no sustained monthly AWS
@@ -158,7 +159,7 @@ A full T3 + T4 run costs about ₹25 more in Mumbai than in us-east-1
 ($1.77 vs $1.56 before tax). GST applies either way, because the seller is
 AWS India, not the region. For an India-focused portfolio, Mumbai's
 data-residency and latency story is worth about ₹25. This input is for
-G-14 (region decision), which is still open.
+G-14; the owner chose Mumbai on 2026-09-25.
 
 ---
 

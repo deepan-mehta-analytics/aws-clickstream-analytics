@@ -7,7 +7,7 @@ placeholders only.
 
 ## Current phase
 Phase 0 in progress (updated 2026-09-25): pricing research and cost model done (G-10), and
-ADR-0001 (stack) proposed and awaiting the owner's decision. Local git repo initialised (no
+ADR-0001 (hybrid stack in Mumbai) accepted; the dashboard tool (BI ADR) is next to decide. Local git repo initialised (no
 remote yet), no AWS resources provisioned, no code written. The original brief is captured in
 `docs/00-initial-brief.md` and is a **non-binding draft**; every stack and
 architecture decision is to be re-researched before it is adopted (see
@@ -19,7 +19,7 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 — Research & decisions (verify Free Tier, cost, latency, data model; write ADRs) | 🔄 In progress | Account confirmed on the legacy Free Tier (2026-09-24). 2026-09-25: list prices verified for Kinesis, Firehose, Redshift Serverless, S3, Lambda, Glue, Athena and Quick; `docs/cost-model.md` estimates about $1.56 per streaming demo window and about $0.15 per batch run (estimates only, nothing measured); ADR-0001 (hybrid batch baseline + bounded streaming windows) Proposed, with an annex that prices a 7-tier ladder in Mumbai (INR incl. GST) with SWOT: ≈ ₹110 one-time on trials, ₹0/month after teardown. DEA-C01 guide v1.1 mapped in `docs/exam-guide-map.md`: 0 of 120 skills shown, 2 designed; 58 planned, 36 stretch, 26 not planned; drives `docs/GAPS.md` |
+| 0 — Research & decisions (verify Free Tier, cost, latency, data model; write ADRs) | 🔄 In progress | Account confirmed on the legacy Free Tier (2026-09-24). 2026-09-25: list prices verified for Kinesis, Firehose, Redshift Serverless, S3, Lambda, Glue, Athena and Quick; `docs/cost-model.md` estimates about $1.56 per streaming demo window and about $0.15 per batch run (estimates only, nothing measured); ADR-0001 (hybrid batch baseline + bounded streaming windows, region Mumbai `ap-south-1`) **Accepted** 2026-09-25, with an annex that prices a 7-tier ladder in Mumbai (INR incl. GST) with SWOT: ≈ ₹110 one-time on trials, ₹0/month after teardown. DEA-C01 guide v1.1 mapped in `docs/exam-guide-map.md`: 0 of 120 skills shown, 4 designed; 58 planned, 36 stretch, 26 not planned; drives `docs/GAPS.md` |
 | 1 — Scaffolding (git repo, CI, Makefile, IaC skeleton, per-directory READMEs) | ⏳ Pending | |
 | 2 — Ingest → Bronze (streaming path to S3) | ⏳ Pending | |
 | 3 — Batch ETL → Silver (sessionization) | ⏳ Pending | |

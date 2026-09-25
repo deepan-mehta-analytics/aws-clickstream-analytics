@@ -1,6 +1,6 @@
 # ADR-0001: Ingest and warehouse stack
 
-- **Status:** Proposed (2026-09-25)
+- **Status:** Accepted (2026-09-25, by the project owner; proposed the same day)
 - **Deciders:** project owner
 - **Related:** `docs/GAPS.md` G-01, G-02, G-04, G-05, G-10; `docs/cost-model.md`;
   [annex: hybrid cost tiers, SWOT and move analysis](0001-hybrid-cost-tiers.md)
@@ -28,9 +28,15 @@ streaming window costs about $1.56 (about $0.06 while the trial credit
 lasts), and a daily batch run about $0.15. Streams left running cost
 $0.36–0.96/day.
 
-## Decision (proposed)
+## Decision
 
-Use a **hybrid** design:
+Use a **hybrid** design in **Asia Pacific (Mumbai), `ap-south-1`**, built up
+tier by tier along the recommended line in the
+[annex](0001-hybrid-cost-tiers.md) §6: local twin, then batch, then
+orchestration, then one combined streaming and Redshift window, then the
+dashboard. Mumbai costs about ₹25 more per streaming and warehouse window
+than us-east-1. GST applies in either region. Mumbai keeps the data in
+India, which fits the portfolio's India focus.
 
 1. **Baseline, always available: the batch path.** A Lambda event
    generator writes to S3 (Bronze), a Glue job builds Silver/Gold, and
@@ -41,8 +47,8 @@ Use a **hybrid** design:
    created and torn down by IaC, and each one is logged in
    `docs/cost-model.md` §5.
 
-This ADR does not decide the BI layer. It gets its own ADR once the Quick
-trial terms are verified (G-07).
+This ADR does not decide the BI layer. The owner's direction (2026-09-25)
+is to avoid a paid QuickSight seat; the dashboard tool gets its own ADR.
 
 ## Consequences
 
@@ -72,7 +78,11 @@ trial terms are verified (G-07).
 - **Provisioned Redshift (dc2.large trial):** AWS offers it only "where
   Serverless [is] unavailable", and a cluster left running bills every hour.
 
-## Blocker to acceptance
+## Preconditions carried forward
 
-The project owner must confirm (a) the hybrid choice and (b) that the account
-shows the Redshift Serverless trial as available in the console.
+- **Before T4 (the Redshift window):** the account owner checks in the
+  Redshift console that the Serverless free trial is offered to this
+  India-billed account. If it is not, T4 runs as one scripted, paid hour
+  (about ₹194 including GST) instead of several trial hours.
+- **Before any resource:** an AWS Budgets alert, set by the account owner.
+  IAM for each tier is applied by the owner as one reviewed IaC stack.

@@ -7,8 +7,9 @@ it.** No number here is a measured cost.
 - **Account:** legacy AWS Free Tier (pre-2025 account, confirmed by AWS
   support 2026-09-24). No new-plan credits. The 12-month offers have likely
   lapsed. See `GAPS.md` G-01.
-- **Region priced:** US East (N. Virginia), `us-east-1`. The region choice is
-  still open (G-14).
+- **Region priced here:** US East (N. Virginia), `us-east-1`, as a baseline.
+  The chosen region is **Mumbai, `ap-south-1`** (ADR-0001, Accepted
+  2026-09-25). Mumbai prices are in the annex linked below.
 - **Currency:** USD. For Mumbai prices in INR including 18% GST, and the
   progressive tier ladder, see
   [`adr/0001-hybrid-cost-tiers.md`](adr/0001-hybrid-cost-tiers.md). That
