@@ -135,4 +135,4 @@ first cloud run.
 
 | Date | Resources created | Torn down / paused | Verified by | Measured cost |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| 2026-09-25 | None: tier T0 local twin ran on a laptop | Nothing to tear down | — | ₹0 AWS cost |

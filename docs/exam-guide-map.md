@@ -8,7 +8,7 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 0 of 120 skills shown · 11 designed · 109 not started**
+**Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 8 designed · 104 not started**
 (as of 2026-09-25; no code or cloud run exists yet).
 
 **Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
@@ -49,7 +49,7 @@ Accepted 2026-09-25):
 | 1.1.9 | Handle throttling and rate limits | Stretch | Producer retry and backoff on Kinesis | ⬜ |
 | 1.1.10 | Fan-in / fan-out for streams | Stretch | Second consumer (enhanced fan-out is extra cost) | ⬜ |
 | 1.1.11 | Replayable ingestion | Planned | Immutable raw Bronze in S3 plus stream retention | ⬜ |
-| 1.1.12 | Stateful vs stateless processing | Planned | Visits aggregated per real session ID (stateful) vs per-click cleaning (stateless), [ADR-0003](adr/0003-data-model.md) | 🟡 |
+| 1.1.12 | Stateful vs stateless processing | Planned | `build_visits` aggregates clicks per real visit (stateful), Silver cleans per click (stateless): `src/clickstream/gold.py`, `tests/test_gold.py` (local run, tier T0) | ✅ |
 
 ### Task 1.2: Transform and process data
 
@@ -60,7 +60,7 @@ Accepted 2026-09-25):
 | 1.2.3 | Integrate multiple sources | Stretch | Join clickstream with page and user reference data | ⬜ |
 | 1.2.4 | Keep processing costs down | Planned | [`cost-model.md`](cost-model.md), ADR-0001 | 🟡 |
 | 1.2.5 | Pick transformation services to fit requirements | Planned | Glue, Lambda, Redshift SQL | ⬜ |
-| 1.2.6 | Convert between formats | Planned | Firehose JSON → Parquet; Glue | ⬜ |
+| 1.2.6 | Convert between formats | Planned | CSV → Parquet at every layer: `src/clickstream/local_run.py` (local run, tier T0); Firehose JSON → Parquet still to come | ✅ |
 | 1.2.7 | Debug transformation failures and slowness | Planned | Runbook entries from real failures | ⬜ |
 | 1.2.8 | Expose data to other systems as APIs | Not planned | — | ⬜ |
 | 1.2.9 | Characterise data volume, velocity and variety | Planned | Measured profile in [`data/README.md`](../data/README.md); [data dictionary](data-dictionary.md) | 🟡 |
@@ -81,8 +81,8 @@ Accepted 2026-09-25):
 |---|---|---|---|---|
 | 1.4.1 | Reduce ingest/transform runtime | Stretch | Before/after job timing | ⬜ |
 | 1.4.2 | Tune Lambda concurrency and performance | Stretch | Generator concurrency settings | ⬜ |
-| 1.4.3 | Use data-engineering languages | Planned | Python, SQL | ⬜ |
-| 1.4.4 | Apply software engineering practice | Planned | Git, tests, CI, logging | ⬜ |
+| 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
+| 1.4.4 | Apply software engineering practice | Planned | Git history, 38 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
 | 1.4.5 | Deploy with IaC | Planned | IaC for every resource (tool choice open, G-13) | ⬜ |
 | 1.4.6 | Package serverless pipelines with SAM | Stretch | Depends on the IaC choice | ⬜ |
 | 1.4.7 | Mount storage in Lambda | Not planned | — | ⬜ |
@@ -138,7 +138,7 @@ Accepted 2026-09-25):
 | 2.4.2 | Handle changing data characteristics | Stretch | Schema-evolution test | ⬜ |
 | 2.4.3 | Schema conversion tools | Not planned | — | ⬜ |
 | 2.4.4 | Data lineage tooling | Not planned | — | ⬜ |
-| 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet, monthly partitions (small-file reasoning), date sort keys, `DISTSTYLE ALL` reference tables, [ADR-0003](adr/0003-data-model.md) | 🟡 |
+| 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet partitioned by month (`click_month`, `visit_month`) in `local_run.py` (local run, tier T0); Redshift sort and distribution keys still designed only, [ADR-0003](adr/0003-data-model.md) | ✅ |
 | 2.4.6 | Vectorization concepts | Not planned | — | ⬜ |
 
 ---
@@ -168,7 +168,7 @@ Accepted 2026-09-25):
 | 3.2.3 | Query and create views with SQL in Redshift and Athena | Planned | Views in both engines | ⬜ |
 | 3.2.4 | Explore data with Athena Spark notebooks | Not planned | — | ⬜ |
 | 3.2.5 | Weigh provisioned vs serverless | Planned | [ADR-0001](adr/0001-ingest-and-warehouse-stack.md), `cost-model.md` | 🟡 |
-| 3.2.6 | Aggregation, rolling averages, grouping, pivoting | Planned | Gold-layer metrics SQL | ⬜ |
+| 3.2.6 | Aggregation, rolling averages, grouping, pivoting | Planned | Grouping and aggregation in `sql/summaries/*.sql`, `tests/test_summaries.py` (local run, tier T0) | ✅ |
 
 ### Task 3.3: Maintain and monitor pipelines
 
@@ -187,9 +187,9 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 3.4.1 | Check quality during processing | Planned | Hard rules to `clicks_rejected` plus reconciliation counts, [ADR-0003](adr/0003-data-model.md) | 🟡 |
+| 3.4.1 | Check quality during processing | Planned | Hard rules route failures to `clicks_rejected` with a reason: `src/clickstream/silver.py`, `tests/test_silver.py` (local run, tier T0) | ✅ |
 | 3.4.2 | Define quality rules | Stretch | Rule set (DataBrew or Glue Data Quality) | ⬜ |
-| 3.4.3 | Investigate consistency | Stretch | Bronze vs Silver row reconciliation | ⬜ |
+| 3.4.3 | Investigate consistency | Stretch | Bronze → Silver → Gold counts reconciled with measured stats: `tests/test_full_file.py`, `quality_report.json` (local run, tier T0) | ✅ |
 | 3.4.4 | Sampling techniques | Stretch | — | ⬜ |
 | 3.4.5 | Handle data skew | Stretch | — | ⬜ |
 
