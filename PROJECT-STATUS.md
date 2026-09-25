@@ -7,7 +7,7 @@ placeholders only.
 
 ## Current phase
 Phase 0 in progress (updated 2026-09-25): pricing research and cost model done (G-10), and
-ADR-0001 (hybrid stack in Mumbai) accepted; ADR-0002 (Streamlit dashboard: local on Athena, published on a snapshot) accepted; ADR-0003 (data model: real UCI #553 clickstream + labelled synthetic time/device, two-grain star schema) proposed, awaiting written review. Local git repo initialised (no
+ADR-0001 (hybrid stack in Mumbai) accepted; ADR-0002 (Streamlit dashboard: local on Athena, published on a snapshot) accepted; ADR-0003 (data model: real UCI #553 clickstream + labelled synthetic time/device, two-grain star schema) accepted. Next: plan the Phase 1 scaffold and the local twin. Local git repo initialised (no
 remote yet), no AWS resources provisioned, no code written. The original brief is captured in
 `docs/00-initial-brief.md` and is a **non-binding draft**; every stack and
 architecture decision is to be re-researched before it is adopted (see

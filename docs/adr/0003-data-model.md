@@ -1,8 +1,7 @@
 # ADR-0003: Data model: real UCI clickstream, labelled enrichment, two-grain star schema
 
-- **Status:** Proposed (2026-09-25). The design was approved section by
-  section in a brainstorm with the project owner; the written ADR is
-  awaiting review.
+- **Status:** Accepted (2026-09-25, by the project owner, after a
+  section-by-section brainstorm and a review of this written ADR)
 - **Deciders:** project owner
 - **Related:** `docs/GAPS.md` G-08, G-09, G-14;
   [ADR-0001](0001-ingest-and-warehouse-stack.md) (hybrid stack, Mumbai);
