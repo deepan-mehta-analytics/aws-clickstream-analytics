@@ -66,3 +66,44 @@ def test_empty_bronze_gives_empty_silver():                             # empty 
     assert result.clicks.empty and result.rejected.empty                # both empty
     assert list(result.clicks.columns) == SILVER_COLUMNS                # columns still present
     assert result.duplicates_removed == 0                               # nothing removed
+
+
+# ── Review fixes: bad source rows are rejected, never crash; visits stay whole ─
+def test_missing_day_is_rejected_not_a_crash():                         # review Important 1
+    bad = {**source_row(2, 1), "day": None}                             # visit 2 has no day
+    result = build_silver(bronze_from([source_row(1, 1), bad]), RECEIVED)  # must not raise
+    assert result.clicks["visit_id"].tolist() == [1]                    # the good visit survives
+    assert result.rejected["rejection_reason"].tolist() == ["missing required field"]  # bad row rejected
+
+
+def test_impossible_date_is_rejected():                                 # review Important 1
+    bad = {**source_row(2, 1), "month": 13}                             # month 13 does not exist
+    result = build_silver(bronze_from([source_row(1, 1), bad]), RECEIVED)  # must not raise
+    assert result.rejected["rejection_reason"].tolist() == ["invalid real date"]  # clear reason
+
+
+def test_missing_visit_id_is_rejected():                                # review Important 1
+    bad = {**source_row(2, 1), "visit_id": None}                        # no visit
+    result = build_silver(bronze_from([source_row(1, 1), bad]), RECEIVED)  # must not raise
+    assert result.clicks["visit_id"].tolist() == [1]                    # good visit kept, still an integer id
+    assert result.clicks["click_id"].tolist() == ["uci553-1-1"]         # id format survives a missing value elsewhere
+    assert result.rejected["rejection_reason"].tolist() == ["missing required field"]  # bad row rejected
+
+
+def test_one_bad_click_rejects_its_whole_visit():                       # review Important 2
+    bronze = bronze_from([source_row(1, 1), {**source_row(1, 2), "colour_code": 99}])  # click 2 has an invalid colour
+    result = build_silver(bronze, RECEIVED)                             # build
+    assert result.clicks.empty                                          # no partial visit reaches Gold
+    assert sorted(result.rejected["rejection_reason"]) == ["colour_code outside 1-14", "other click in visit rejected"]  # both rows explained
+
+
+def test_time_not_increasing_is_rejected():                             # review Important 3
+    bronze = bronze_from([source_row(1, 1), source_row(1, 2)])          # two clicks
+    bronze.loc[bronze["click_number_in_visit"] == 2, "click_time_synthetic"] = bronze.loc[bronze["click_number_in_visit"] == 1, "click_time_synthetic"].iloc[0] - pd.Timedelta(seconds=1)  # click 2 before click 1, same day
+    result = build_silver(bronze, RECEIVED)                             # build
+    assert "synthetic time not increasing" in set(result.rejected["rejection_reason"])  # rule fires
+
+
+def test_first_failing_rule_is_the_recorded_reason():                   # review Important 3
+    result = build_silver(bronze_from([{**source_row(1, 1, country=99), "colour_code": 99}]), RECEIVED)  # two failures
+    assert result.rejected["rejection_reason"].tolist() == ["country_code outside 1-47"]  # earlier rule wins

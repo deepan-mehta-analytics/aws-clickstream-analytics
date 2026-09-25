@@ -43,3 +43,9 @@ def test_bounce_rate_by_product_and_country_names():                    # remain
     geo = result["visits_by_country_and_device"]                        # by country and device
     assert set(geo["country_name"]) == {"India"}                        # decoded via countries
     assert geo["visits"].sum() == 2                                     # all visits counted
+
+
+def test_summary_sql_avoids_values_row_lists():                          # review Important 4: Redshift has no VALUES in FROM
+    from clickstream.summaries import SQL_DIR                           # summary folder
+    for name in SUMMARY_NAMES:                                          # every summary file
+        assert "VALUES" not in (SQL_DIR / f"{name}.sql").read_text(encoding="utf-8").upper()  # portable to DuckDB, Athena and Redshift

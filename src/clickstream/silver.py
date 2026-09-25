@@ -11,7 +11,7 @@ from clickstream.enrichment import SHOP_TIMEZONE                        # shop l
 REQUIRED_COLUMNS = [                                                    # fields every click must have
     "click_id", "visit_id", "year", "month", "day", "click_number_in_visit", "country_code", "category_code",  # identity, date, codes
     "product_code", "colour_code", "photo_position_code", "photo_angle_code", "price_usd",  # product fields
-    "price_above_category_average_code", "page_number_in_shop", "click_time_synthetic", "received_time",  # flags and times
+    "price_above_category_average_code", "page_number_in_shop", "received_time",  # flags and arrival time (synthetic time is checked by the date rules)
 ]
 VALID_CODE_RANGES = {                                                   # allowed code ranges from the codebook
     "country_code": (1, 47), "category_code": (1, 4), "colour_code": (1, 14), "photo_position_code": (1, 6),  # geo, category, colour, position
@@ -47,21 +47,25 @@ def build_silver(bronze: pd.DataFrame, run_time: pd.Timestamp) -> SilverResult: 
         reasons[failed.fillna(True).astype(bool) & (reasons == "")] = reason  # first failing rule wins
 
     flag(unique[REQUIRED_COLUMNS].isna().any(axis=1), "missing required field")  # every required field present
+    real_timestamp = pd.to_datetime(unique[["year", "month", "day"]], errors="coerce")  # NaT when the date is impossible
+    flag(real_timestamp.isna(), "invalid real date")                    # e.g. month 13
     for column, (low, high) in VALID_CODE_RANGES.items():              # each coded field
         flag(~unique[column].between(low, high), f"{column} outside {low}-{high}")  # inside codebook range
     contiguous = unique.groupby("visit_id")["click_number_in_visit"].transform(lambda numbers: sorted(numbers) == list(range(1, len(numbers) + 1)))  # 1..n with no gaps
     flag(~contiguous.astype(bool), "click numbers not contiguous in visit")  # the whole visit fails together
-    real_date = pd.to_datetime(unique[["year", "month", "day"]], errors="coerce").dt.date  # the real 2008 date
+    real_date = real_timestamp.dt.date                                  # the real 2008 date
     local_time = unique["click_time_synthetic"].dt.tz_convert(SHOP_TIMEZONE)  # shop-local synthetic time
     flag(local_time.dt.date != real_date, "synthetic time outside real date")  # synthetic time on the real date
     in_visit_order = unique.sort_values(["visit_id", "click_number_in_visit"])  # rows in click order
     gap_seconds = in_visit_order.groupby("visit_id")["click_time_synthetic"].diff().dt.total_seconds().fillna(1)  # seconds since previous click
     flag((gap_seconds <= 0).reindex(unique.index), "synthetic time not increasing")  # times must increase
+    visit_has_failure = (reasons != "").groupby(unique["visit_id"], dropna=False).transform("any").astype(bool)  # any failed click in the visit (missing ids form their own group)
+    flag(visit_has_failure, "other click in visit rejected")            # never pass a partial visit to Gold
 
     # ── Split into rejected and passing rows ──────────────────
     failed = reasons != ""                                              # rows with a reason
     rejected = unique[failed].assign(rejection_reason=reasons[failed], rejected_time=run_time.tz_convert("UTC"))  # rejects with reason
-    passing = unique[~failed]                                           # clean rows
+    passing = unique[~failed].astype({column: "int64" for column in ["visit_id", "click_number_in_visit", "country_code", "price_usd", "page_number_in_shop"]})  # clean rows, whole-number columns back to integers
     passing_local = local_time[~failed]                                 # their local times
 
     # ── Decode codes and derive columns ───────────────────────

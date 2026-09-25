@@ -61,7 +61,7 @@ a Redshift Serverless window, and a Streamlit dashboard. See the Roadmap.
 | Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| Testing | pytest 9 | 38 tests, including full-file reconciliation |
+| Testing | pytest 9 | 45 tests, including full-file reconciliation |
 | Linting | ruff | Static checks |
 | CI | GitHub Actions | Hygiene, lint and tests; downloads the dataset and verifies its MD5 (runs once the repo has a remote) |
 | Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
@@ -117,7 +117,7 @@ Design decisions are recorded as ADRs:
 aws-clickstream-analytics/
 ├── src/clickstream/            ← the pipeline package, one module per stage
 ├── sql/summaries/              ← dashboard SQL, portable to Athena/Redshift
-├── tests/                      ← 38 pytest tests incl. full-file reconciliation
+├── tests/                      ← 45 pytest tests incl. full-file reconciliation
 ├── data/README.md              ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                    ← architecture decision records (0001–0003 + cost annex)
@@ -176,7 +176,7 @@ has not run yet, because the repository has no remote.
 .venv/Scripts/python -m pytest -v
 ```
 
-38 tests. They cover:
+45 tests. They cover:
 - the reader and codebook;
 - repeatable seeded enrichment, including a 195-click visit near midnight;
 - Bronze resends;
@@ -237,7 +237,7 @@ is marked shown without a real run behind it.
 
 ## 🔜 Roadmap
 
-- [x] T0: local twin (Bronze → Silver → Gold → summaries, 38 tests)
+- [x] T0: local twin (Bronze → Silver → Gold → summaries, 45 tests)
 - [ ] T1: serverless batch on AWS Mumbai (Lambda → S3 → Glue → Athena)
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window

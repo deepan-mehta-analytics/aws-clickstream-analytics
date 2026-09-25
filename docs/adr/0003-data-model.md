@@ -109,10 +109,14 @@ Measured from the real UCI file (see `data/README.md`):
    - Hard rules (rows go to `clicks_rejected`):
      - `click_id` is unique;
      - required fields are present;
+     - the real date is a valid calendar date;
      - codes are within the codebook's ranges;
      - click numbers are contiguous within each visit;
      - synthetic times increase with click number and stay within the
-       real date.
+       real date;
+     - if any click in a visit fails, every click in that visit is
+       rejected ("other click in visit rejected"), so no partial visit
+       reaches Gold (added after the whole-branch review, 2026-09-25).
    - Reported, not failed: category mismatches (exactly 1 expected),
      duplicates removed from Bronze, and reconciliation counts (165,474
      clicks / 24,026 visits / 5,042 one-click visits).
@@ -137,7 +141,7 @@ Measured from the real UCI file (see `data/README.md`):
 - The volume is 165,474 events, about 1.65× the 100,000 assumed in the
   cost model. The per-GB lines scale accordingly; totals stay in single
   rupees per run.
-- Exam coverage (designed, not yet shown):
+- Exam coverage (the local twin now shows several of these; see `docs/exam-guide-map.md` for the current status):
   - 2.4.1 schema design;
   - 2.4.5 partitioning and compression;
   - 2.2.4 partition sync;

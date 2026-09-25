@@ -14,7 +14,7 @@ The design is in [ADR-0003](adr/0003-data-model.md).
 **Role** gives each table's star-schema role, so the plain table names
 stay readable without prefixes such as `fact_` or `dim_`.
 
-Status: **designed, not yet built.** Types are the intended Parquet and
+Status: **built in the local twin (tier T0)**; cloud tables not built yet. Types are the Parquet types written locally and the intended
 Redshift types.
 
 ---
@@ -88,7 +88,7 @@ the event is received.
 ### `clicks_rejected`: rows that failed a hard quality rule
 
 All `clicks_received` columns, plus `rejection_reason` (which rule
-failed) and `rejected_time` (when). No row is dropped silently.
+failed) and `rejected_time` (when). No row is dropped silently. If any click in a visit fails, the whole visit is rejected (reason `other click in visit rejected` for the other clicks), so Gold never holds a partial visit.
 
 ---
 

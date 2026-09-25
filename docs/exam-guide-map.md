@@ -9,7 +9,7 @@ wording below is **paraphrased**; the official guide is the authority.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
 **Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 8 designed · 104 not started**
-(as of 2026-09-25; no code or cloud run exists yet).
+(as of 2026-09-25; the local twin, tier T0, is built and run; no cloud run exists yet).
 
 **Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
 domain: D1 21/37, D2 11/26, D3 17/28, D4 9/29. Security and governance
@@ -82,7 +82,7 @@ Accepted 2026-09-25):
 | 1.4.1 | Reduce ingest/transform runtime | Stretch | Before/after job timing | ⬜ |
 | 1.4.2 | Tune Lambda concurrency and performance | Stretch | Generator concurrency settings | ⬜ |
 | 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
-| 1.4.4 | Apply software engineering practice | Planned | Git history, 38 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
+| 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
 | 1.4.5 | Deploy with IaC | Planned | IaC for every resource (tool choice open, G-13) | ⬜ |
 | 1.4.6 | Package serverless pipelines with SAM | Stretch | Depends on the IaC choice | ⬜ |
 | 1.4.7 | Mount storage in Lambda | Not planned | — | ⬜ |
