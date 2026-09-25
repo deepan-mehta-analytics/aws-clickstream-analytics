@@ -8,7 +8,7 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 0 of 120 skills shown · 5 designed · 115 not started**
+**Coverage: 0 of 120 skills shown · 11 designed · 109 not started**
 (as of 2026-09-25; no code or cloud run exists yet).
 
 **Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
@@ -49,7 +49,7 @@ Accepted 2026-09-25):
 | 1.1.9 | Handle throttling and rate limits | Stretch | Producer retry and backoff on Kinesis | ⬜ |
 | 1.1.10 | Fan-in / fan-out for streams | Stretch | Second consumer (enhanced fan-out is extra cost) | ⬜ |
 | 1.1.11 | Replayable ingestion | Planned | Immutable raw Bronze in S3 plus stream retention | ⬜ |
-| 1.1.12 | Stateful vs stateless processing | Planned | Sessionization (stateful) vs per-event cleaning (stateless) | ⬜ |
+| 1.1.12 | Stateful vs stateless processing | Planned | Visits aggregated per real session ID (stateful) vs per-click cleaning (stateless), [ADR-0003](adr/0003-data-model.md) | 🟡 |
 
 ### Task 1.2: Transform and process data
 
@@ -63,7 +63,7 @@ Accepted 2026-09-25):
 | 1.2.6 | Convert between formats | Planned | Firehose JSON → Parquet; Glue | ⬜ |
 | 1.2.7 | Debug transformation failures and slowness | Planned | Runbook entries from real failures | ⬜ |
 | 1.2.8 | Expose data to other systems as APIs | Not planned | — | ⬜ |
-| 1.2.9 | Characterise data volume, velocity and variety | Planned | Data dictionary | ⬜ |
+| 1.2.9 | Characterise data volume, velocity and variety | Planned | Measured profile in [`data/README.md`](../data/README.md); [data dictionary](data-dictionary.md) | 🟡 |
 | 1.2.10 | Use LLMs in data processing | Not planned | — | ⬜ |
 
 ### Task 1.3: Orchestrate pipelines
@@ -115,7 +115,7 @@ Accepted 2026-09-25):
 | 2.2.1 | Query source data through a catalog | Planned | Athena via Glue Data Catalog | ⬜ |
 | 2.2.2 | Build a technical catalog | Planned | Glue Data Catalog | ⬜ |
 | 2.2.3 | Discover schemas with crawlers | Stretch | Crawler vs IaC-defined tables (crawler cost) | ⬜ |
-| 2.2.4 | Keep partitions in sync with the catalog | Planned | Partition projection or partition loads | ⬜ |
+| 2.2.4 | Keep partitions in sync with the catalog | Planned | Athena partition projection on monthly partitions, [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.2.5 | Create catalog connections | Stretch | — | ⬜ |
 | 2.2.6 | Business data catalogs | Not planned | — | ⬜ |
 
@@ -134,11 +134,11 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 2.4.1 | Design Redshift / DynamoDB / Lake Formation schemas | Planned | Redshift star schema | ⬜ |
+| 2.4.1 | Design Redshift / DynamoDB / Lake Formation schemas | Planned | Two-grain star schema (clicks, visits), [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.4.2 | Handle changing data characteristics | Stretch | Schema-evolution test | ⬜ |
 | 2.4.3 | Schema conversion tools | Not planned | — | ⬜ |
 | 2.4.4 | Data lineage tooling | Not planned | — | ⬜ |
-| 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet, date partitions, sort keys | ⬜ |
+| 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet, monthly partitions (small-file reasoning), date sort keys, `DISTSTYLE ALL` reference tables, [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.4.6 | Vectorization concepts | Not planned | — | ⬜ |
 
 ---
@@ -187,7 +187,7 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 3.4.1 | Check quality during processing | Planned | Null/range checks in the Glue job | ⬜ |
+| 3.4.1 | Check quality during processing | Planned | Hard rules to `clicks_rejected` plus reconciliation counts, [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 3.4.2 | Define quality rules | Stretch | Rule set (DataBrew or Glue Data Quality) | ⬜ |
 | 3.4.3 | Investigate consistency | Stretch | Bronze vs Silver row reconciliation | ⬜ |
 | 3.4.4 | Sampling techniques | Stretch | — | ⬜ |

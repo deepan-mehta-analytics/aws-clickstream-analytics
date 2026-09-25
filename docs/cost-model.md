@@ -51,7 +51,9 @@ uses the same 5 KB rounding as ingest.
 
 ## 2. Workload assumptions
 
-Illustrative demo volumes, not measured:
+Illustrative demo volumes, not measured. The chosen dataset (ADR-0003) has
+**165,474 events**, about 1.65× the 100,000 below. The per-GB and per-request
+lines scale by that factor, and totals stay at single rupees per run:
 
 - **Events:** 100,000 synthetic clickstream events of about 1 KB each per
   window or day (~0.1 GB raw).

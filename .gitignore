@@ -26,6 +26,7 @@ cdk.out/
 # ── Local data (large / regenerable datasets) ─────────────────
 /data/*
 !/data/.gitkeep
+!/data/README.md
 *.parquet
 *.csv
 
