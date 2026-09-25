@@ -1,0 +1,29 @@
+# ── CI: hygiene, lint and tests on every push and pull request ─
+name: ci                                                  # workflow name shown in GitHub
+
+on:                                                       # events that trigger the workflow
+  push:                                                   # every push
+  pull_request:                                           # every pull request
+
+jobs:                                                     # jobs run in parallel
+  hygiene:                                                # guard against local-only files
+    runs-on: ubuntu-latest                                # Linux runner
+    steps:                                                # job steps
+      - uses: actions/checkout@v4                         # fetch the repository
+      - name: Fail if local-only files are tracked        # .env, CLAUDE.md, workflow_status*.md must never be in git
+        run: |                                            # shell script below
+          if git ls-files | grep -E '(^|/)(\.env|CLAUDE\.md|workflow_status[^/]*\.md)$'; then echo "Local-only file is tracked"; exit 1; fi
+
+  test:                                                   # lint and unit tests
+    runs-on: ubuntu-latest                                # Linux runner
+    steps:                                                # job steps
+      - uses: actions/checkout@v4                         # fetch the repository
+      - uses: actions/setup-python@v5                     # install Python
+        with:                                             # setup options
+          python-version: "3.11"                          # matches requires-python
+      - name: Install package and dev tools               # same pins as local
+        run: python -m pip install -e ".[dev]"            # editable install with pytest and ruff
+      - name: Lint                                        # static checks
+        run: python -m ruff check src tests               # fails on lint errors
+      - name: Test                                        # unit tests (full-file test skips until Task 9)
+        run: python -m pytest -v                          # run the suite

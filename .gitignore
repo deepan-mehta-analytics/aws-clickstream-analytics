@@ -29,6 +29,8 @@ cdk.out/
 !/data/README.md
 *.parquet
 *.csv
+# Local pipeline output (regenerable with `python -m clickstream.local_run`)
+/output/
 
 # ── Python ────────────────────────────────────────────────────
 __pycache__/

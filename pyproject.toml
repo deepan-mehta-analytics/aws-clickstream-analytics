@@ -1,0 +1,32 @@
+# ── Build system ──────────────────────────────────────────────
+[build-system]                                          # how pip builds the package
+requires = ["setuptools>=68"]                           # setuptools as the build backend
+build-backend = "setuptools.build_meta"                 # standard PEP 517 entry point
+
+# ── Project metadata and pinned dependencies ──────────────────
+[project]                                               # package description
+name = "clickstream"                                    # import name of the package
+version = "0.1.0"                                       # matches clickstream.__version__
+requires-python = ">=3.11"                              # zoneinfo + modern typing
+dependencies = [                                        # runtime libraries, pinned to verified versions
+    "pandas==2.3.3",                                    # dataframes
+    "pyarrow==16.1.0",                                  # Parquet read/write
+    "duckdb==1.5.2",                                    # local SQL engine for the summaries
+    "tzdata==2026.2",                                   # timezone database (Europe/Warsaw) on every OS
+]
+
+[project.optional-dependencies]                         # extra tools for development
+dev = ["pytest==9.0.2", "ruff==0.15.12"]                # test runner and linter
+
+# ── Package discovery ─────────────────────────────────────────
+[tool.setuptools.packages.find]                         # find packages automatically
+where = ["src"]                                         # packages live under src/
+
+# ── Test settings ─────────────────────────────────────────────
+[tool.pytest.ini_options]                               # pytest configuration
+testpaths = ["tests"]                                   # where tests live
+markers = ["full_file: needs the real UCI file in data/"]  # marker for the reconciliation test
+
+# ── Lint settings ─────────────────────────────────────────────
+[tool.ruff]                                             # ruff configuration
+line-length = 160                                       # room for the mandatory inline comments
