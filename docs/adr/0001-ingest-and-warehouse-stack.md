@@ -47,8 +47,9 @@ India, which fits the portfolio's India focus.
    created and torn down by IaC, and each one is logged in
    `docs/cost-model.md` §5.
 
-This ADR does not decide the BI layer. The owner's direction (2026-09-25)
-is to avoid a paid QuickSight seat; the dashboard tool gets its own ADR.
+This ADR does not decide the BI layer; see
+[ADR-0002](0002-dashboard-streamlit.md) (one Streamlit app, local on
+Athena and published on a snapshot, ₹0/month).
 
 ## Consequences
 

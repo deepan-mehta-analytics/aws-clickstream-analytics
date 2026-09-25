@@ -8,7 +8,7 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 0 of 120 skills shown · 4 designed · 116 not started**
+**Coverage: 0 of 120 skills shown · 5 designed · 115 not started**
 (as of 2026-09-25; no code or cloud run exists yet).
 
 **Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
@@ -163,7 +163,7 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 3.2.1 | Visualize data | Planned | Dashboard (BI option undecided, G-07) | ⬜ |
+| 3.2.1 | Visualize data | Planned | Streamlit app on Athena plus a published snapshot ([ADR-0002](adr/0002-dashboard-streamlit.md)); QuickSight itself not shown | 🟡 |
 | 3.2.2 | Verify and clean data | Planned | Athena validation queries | ⬜ |
 | 3.2.3 | Query and create views with SQL in Redshift and Athena | Planned | Views in both engines | ⬜ |
 | 3.2.4 | Explore data with Athena Spark notebooks | Not planned | — | ⬜ |
