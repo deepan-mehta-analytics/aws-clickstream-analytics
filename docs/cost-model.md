@@ -9,8 +9,11 @@ it.** No number here is a measured cost.
   lapsed. See `GAPS.md` G-01.
 - **Region priced:** US East (N. Virginia), `us-east-1`. The region choice is
   still open (G-14).
-- **Currency:** USD. INR conversion is pending; no exchange rate has been
-  fetched yet.
+- **Currency:** USD. For Mumbai prices in INR including 18% GST, and the
+  progressive tier ladder, see
+  [`adr/0001-hybrid-cost-tiers.md`](adr/0001-hybrid-cost-tiers.md). That
+  annex also found Glue 6.0+ at $0.308 per DPU-hour, below the $0.44 used
+  below.
 
 ---
 

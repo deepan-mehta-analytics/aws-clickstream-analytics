@@ -2,7 +2,10 @@
 
 - **Status:** Proposed (2026-09-25)
 - **Deciders:** project owner
-- **Related:** `docs/GAPS.md` G-01, G-02, G-04, G-05, G-10; `docs/cost-model.md`
+- **Related:** `docs/GAPS.md` G-01, G-02, G-04, G-05, G-10; `docs/cost-model.md`;
+  [annex: hybrid cost tiers, SWOT and move analysis](0001-hybrid-cost-tiers.md)
+  (Mumbai, INR incl. GST: about ₹110 one-time for the full hybrid on trials,
+  ₹0/month after teardown)
 
 ## Context
 
