@@ -5,6 +5,8 @@
 /MEMORY.md
 /feedback_*.md
 /reference_*.md
+# Private specs, plans and exam study notes (same pattern as databricks-fraud-detection)
+/docs/superpowers/
 
 # ── Secrets and credentials ───────────────────────────────────
 .env
