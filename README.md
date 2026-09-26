@@ -61,11 +61,11 @@ a Redshift Serverless window, and a Streamlit dashboard. See the Roadmap.
 | Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| Testing | pytest 9 | 61 tests, including full-file reconciliation and template guardrails |
+| Testing | pytest 9 | 70 tests, including full-file reconciliation and template guardrails |
 | Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
 | CI | GitHub Actions | Hygiene, lint and tests; downloads the dataset and verifies its MD5 (runs once the repo has a remote) |
 | Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
-| Infrastructure as code (planned) | AWS SAM + CloudFormation, `cfn-lint` | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
+| Infrastructure as code | AWS SAM + CloudFormation, `cfn-lint` | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
 | Dashboard (planned) | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
 
 ---
@@ -119,7 +119,7 @@ Design decisions are recorded as ADRs:
 aws-clickstream-analytics/
 ├── src/clickstream/            ← the pipeline package, one module per stage
 ├── sql/summaries/              ← dashboard SQL, portable to Athena/Redshift
-├── tests/                      ← 61 pytest tests incl. full-file reconciliation and template guardrails
+├── tests/                      ← 70 pytest tests incl. full-file reconciliation and template guardrails
 ├── data/README.md              ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                    ← architecture decision records (0001–0004 + cost annex)
@@ -131,7 +131,7 @@ aws-clickstream-analytics/
 ├── infra/                      ← CloudFormation/SAM stacks (foundation written; owner-deployed only)
 ├── glue/  dashboards/          ← placeholders for the cloud tiers (each has a README)
 ├── .github/workflows/ci.yml    ← hygiene, lint, tests
-├── Makefile                    ← working local targets; cloud targets say "not built yet"
+├── Makefile                    ← working local targets; cloud targets say "owner-run only"
 ├── pyproject.toml              ← package and pinned dependencies
 ├── PROJECT-STATUS.md           ← phase-by-phase status
 └── LICENSE                     ← MIT
@@ -180,7 +180,7 @@ has not run yet, because the repository has no remote.
 .venv/Scripts/cfn-lint
 ```
 
-61 tests. They cover:
+70 tests. They cover:
 - the reader and codebook;
 - repeatable seeded enrichment, including a 195-click visit near midnight;
 - Bronze resends;
@@ -189,7 +189,7 @@ has not run yet, because the repository has no remote.
 - the SQL summaries;
 - the end-to-end run;
 - `test_full_file.py`, which checks the real file against the measured stats. It is skipped when the dataset is not downloaded;
-- `test_infra_templates.py`, which checks every CloudFormation template for encryption, private buckets, TLS-only policies, safe IAM and no account IDs.
+- `test_infra_templates.py`, which checks every CloudFormation template for encryption, private buckets, TLS-only policies, safe IAM (no admin or public grants) and no account IDs in any committed file.
 
 ---
 
@@ -238,7 +238,7 @@ is marked shown without a real run behind it.
 - **Time of day and device are synthetic:** generated from a fixed seed, and labelled `_synthetic` everywhere.
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%).
 - **No AWS resources exist yet:** the cloud tiers are designed and priced, not built.
-- **Infrastructure as code is designed, not written:** AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). Only the foundation (artifacts bucket) template exists; it has not been deployed.
+- **Infrastructure as code is only partly written:** AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). Only the foundation (artifacts bucket) template exists; it has not been deployed.
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)).
 
 ## 🔜 Roadmap

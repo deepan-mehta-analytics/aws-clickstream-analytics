@@ -2,16 +2,26 @@
 # Each template rule takes a parsed template (dict) and returns a list of
 # problem strings; an empty list means the template passes.
 import re                                                               # regular expressions
+import subprocess                                                       # asks git which files are tracked
 from pathlib import Path                                                # file paths
 
 import yaml                                                             # YAML parser (PyYAML)
 
-INFRA_FOLDER = Path(__file__).resolve().parents[1] / "infra"            # repo-root/infra
-TEXT_SUFFIXES = {".yaml", ".yml", ".toml", ".json", ".md"}              # files scanned for account IDs
+REPO_ROOT = Path(__file__).resolve().parents[1]                         # repository root
+INFRA_FOLDER = REPO_ROOT / "infra"                                      # repo-root/infra
+TEXT_SUFFIXES = {".yaml", ".yml", ".toml", ".json", ".md", ".py", ".sql", ".txt", ".cfg", ".ini"}  # text files scanned for account IDs
+TEXT_NAMES = {"Makefile", ".cfnlintrc", ".gitignore"}                   # suffix-less text files scanned too
 ACCOUNT_ID = re.compile(r"(?<![0-9])[0-9]{12}(?![0-9])")                # exactly 12 digits in a row
 BLOCK_FLAGS = ["BlockPublicAcls", "BlockPublicPolicy", "IgnorePublicAcls", "RestrictPublicBuckets"]  # all four must be true
 NAME_PROPERTIES = ["BucketName", "FunctionName", "Name", "TableName", "StreamName", "DeliveryStreamName"]  # explicit-name properties
-IAM_NAME_PROPERTIES = {"AWS::IAM::Role": "RoleName", "AWS::IAM::ManagedPolicy": "ManagedPolicyName"}  # names that need NAMED_IAM
+IAM_NAME_PROPERTIES = {                                                 # IAM names that need CAPABILITY_NAMED_IAM
+    "AWS::IAM::Role": "RoleName",                                       # roles
+    "AWS::IAM::ManagedPolicy": "ManagedPolicyName",                     # customer managed policies
+    "AWS::IAM::Group": "GroupName",                                     # groups
+    "AWS::IAM::InstanceProfile": "InstanceProfileName",                 # instance profiles
+}
+BROAD_MANAGED_POLICY = re.compile(r"(AdministratorAccess|PowerUserAccess|FullAccess)")  # AWS managed policies too broad to attach
+SAM_POLICY_TYPES = {"AWS::Serverless::Function", "AWS::Serverless::StateMachine"}  # SAM types with a Policies shorthand
 
 
 # ── Loading ───────────────────────────────────────────────────
@@ -69,12 +79,18 @@ def _buckets(template: dict) -> dict:                                   # logica
     return {name: body for name, body in _resources(template).items() if (body or {}).get("Type") == "AWS::S3::Bucket"}  # S3 buckets only
 
 
-# ── Account IDs (every text file under infra/) ────────────────
-def account_id_problems(folder: Path) -> list[str]:                     # scan a folder for 12-digit numbers
+# ── Account IDs (every tracked text file in the repository) ───
+def tracked_text_files(root: Path) -> list[Path]:                       # files git tracks, text types only
+    listing = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True).stdout  # NUL-separated paths
+    paths = [root / name for name in listing.split("\0") if name]       # absolute paths, empty entries dropped
+    return sorted(path for path in paths if path.suffix in TEXT_SUFFIXES or path.name in TEXT_NAMES)  # text files, stable order
+
+
+def account_id_problems(root: Path) -> list[str]:                       # scan committed files for 12-digit numbers
     problems = []                                                       # collected problems
-    for path in sorted(folder.rglob("*")):                              # every file, stable order
-        if path.is_file() and path.suffix in TEXT_SUFFIXES and ACCOUNT_ID.search(path.read_text(encoding="utf-8")):  # text file with 12 digits
-            problems.append(f"{path.relative_to(folder).as_posix()}: 12-digit number (possible AWS account ID)")  # report relative path
+    for path in tracked_text_files(root):                               # untracked build output is never scanned
+        if path.is_file() and ACCOUNT_ID.search(path.read_text(encoding="utf-8", errors="ignore")):  # tracked and still on disk
+            problems.append(f"{path.relative_to(root).as_posix()}: 12-digit number (possible AWS account ID)")  # report relative path
     return problems                                                     # empty when clean
 
 
@@ -96,28 +112,83 @@ def public_bucket_problems(template: dict) -> list[str]:                # all fo
     return problems                                                     # empty when every bucket is private
 
 
+def _is_everyone(principal) -> bool:                                    # Principal "*" or {"AWS": "*"}
+    if principal == "*":                                                # bare wildcard
+        return True                                                     # everyone
+    return isinstance(principal, dict) and "*" in _as_list(principal.get("AWS"))  # AWS-wildcard form
+
+
+def _covers_objects(resource) -> bool:                                  # does a Resource entry include the bucket's objects?
+    text = resource.get("Fn::Sub") if isinstance(resource, dict) else resource  # !Sub text or a plain string
+    text = text[0] if isinstance(text, list) else text                  # !Sub list form: first item is the text
+    return isinstance(text, str) and (text == "*" or text.endswith("/*"))  # "*" or ".../*"
+
+
+def _denies_plain_http(statement) -> bool:                              # a full TLS-only deny statement
+    if not isinstance(statement, dict) or statement.get("Effect") != "Deny":  # only Deny statements count
+        return False                                                    # anything else is not a TLS deny
+    condition = (statement.get("Condition") or {}).get("Bool") or {}    # Bool condition block
+    return (str(condition.get("aws:SecureTransport")).lower() == "false"  # only when TLS is not used...
+            and _is_everyone(statement.get("Principal"))                # ...for every caller...
+            and any(action in ("*", "s3:*") for action in _as_list(statement.get("Action")))  # ...every S3 action...
+            and any(_covers_objects(resource) for resource in _as_list(statement.get("Resource"))))  # ...including objects
+
+
 def insecure_transport_problems(template: dict) -> list[str]:           # every bucket has a TLS-only deny
     covered = set()                                                     # buckets with a TLS deny policy
     for body in _resources(template).values():                          # every resource
         if (body or {}).get("Type") != "AWS::S3::BucketPolicy":         # only bucket policies
             continue                                                    # skip others
         target = ((body.get("Properties") or {}).get("Bucket") or {})   # which bucket the policy is for
-        for statement in _statements(body.get("Properties")):           # each statement
-            condition = ((statement or {}).get("Condition") or {}).get("Bool") or {}  # Bool condition block
-            if statement.get("Effect") == "Deny" and str(condition.get("aws:SecureTransport")).lower() == "false":  # TLS deny
-                if isinstance(target, dict) and "Ref" in target:        # attached with !Ref Bucket
-                    covered.add(target["Ref"])                          # mark that bucket covered
+        if any(_denies_plain_http(statement) for statement in _statements(body.get("Properties"))):  # has a full TLS deny
+            if isinstance(target, dict) and "Ref" in target:            # attached with !Ref Bucket
+                covered.add(target["Ref"])                              # mark that bucket covered
     return [f"{name}: no bucket policy denying requests without TLS" for name in _buckets(template) if name not in covered]  # uncovered buckets
 
 
 # ── IAM rules ─────────────────────────────────────────────────
-def wildcard_action_problems(template: dict) -> list[str]:              # no Allow with Action "*"
+def _allow_statements(body):                                            # every Allow statement under a resource
+    return [statement for statement in _statements(body) if isinstance(statement, dict) and statement.get("Effect") == "Allow"]  # skip nulls and Denys
+
+
+def wildcard_action_problems(template: dict) -> list[str]:              # no admin-style or near-admin grants
     problems = []                                                       # collected problems
     for name, body in _resources(template).items():                     # each resource
-        for statement in _statements(body):                             # each statement inside it
-            if (statement or {}).get("Effect") == "Allow" and "*" in _as_list(statement.get("Action")):  # admin-style grant
+        for statement in _allow_statements(body):                       # each Allow statement inside it
+            actions = _as_list(statement.get("Action"))                 # granted actions
+            if "*" in actions:                                          # every action on everything
                 problems.append(f"{name}: Allow statement with Action '*'")  # report
-    return problems                                                     # empty when no wildcard grants
+            elif "NotAction" in statement or "NotResource" in statement:  # allow-by-exclusion grants
+                problems.append(f"{name}: Allow statement with NotAction/NotResource")  # report
+            elif "*" in _as_list(statement.get("Resource")) and any(isinstance(action, str) and action.endswith(":*") for action in actions):  # service-wide on all resources
+                problems.append(f"{name}: Allow statement with a service-wide action on Resource '*'")  # report
+    return problems                                                     # empty when no broad grants
+
+
+def broad_managed_policy_problems(template: dict) -> list[str]:        # no AdministratorAccess / PowerUserAccess / *FullAccess
+    problems = []                                                       # collected problems
+    for name, body in _resources(template).items():                     # each resource
+        properties = (body or {}).get("Properties") or {}               # its properties
+        attached = _as_list(properties.get("ManagedPolicyArns") or [])  # IAM role / group / user attachments
+        if (body or {}).get("Type") in SAM_POLICY_TYPES:                # SAM Policies shorthand: string or list
+            attached += _as_list(properties.get("Policies") or [])      # policy names or ARNs mixed with statements
+        problems += [f"{name}: broad AWS managed policy {policy}" for policy in attached if isinstance(policy, str) and BROAD_MANAGED_POLICY.search(policy)]  # report each
+    return problems                                                     # empty when no broad managed policies
+
+
+def public_principal_problems(template: dict) -> list[str]:            # nothing callable or readable by everyone
+    problems = []                                                       # collected problems
+    for name, body in _resources(template).items():                     # each resource
+        kind = (body or {}).get("Type")                                 # resource type
+        properties = (body or {}).get("Properties") or {}               # its properties
+        if kind == "AWS::Lambda::Permission" and properties.get("Principal") == "*":  # anyone may invoke
+            problems.append(f"{name}: Lambda permission for Principal '*'")  # report
+        url = properties if kind == "AWS::Lambda::Url" else properties.get("FunctionUrlConfig") if kind == "AWS::Serverless::Function" else None  # function URL settings
+        if isinstance(url, dict) and url.get("AuthType") == "NONE":     # unauthenticated URL
+            problems.append(f"{name}: function URL with AuthType NONE")  # report
+        if any(_is_everyone(statement.get("Principal")) for statement in _allow_statements(body)):  # resource policy open to all
+            problems.append(f"{name}: Allow statement with Principal '*'")  # report
+    return problems                                                     # empty when nothing is public
 
 
 def iam_user_problems(template: dict) -> list[str]:                     # no IAM users or access keys
@@ -154,7 +225,9 @@ ALL_TEMPLATE_RULES = [                                                  # every 
     unencrypted_bucket_problems,                                        # encryption at rest
     public_bucket_problems,                                             # no public access
     insecure_transport_problems,                                        # TLS only
-    wildcard_action_problems,                                           # no Action "*"
+    wildcard_action_problems,                                           # no Action "*", NotAction or service-wide "*"
+    broad_managed_policy_problems,                                      # no admin/full-access managed policies
+    public_principal_problems,                                          # no public principals or open URLs
     iam_user_problems,                                                  # no IAM users or keys
     named_iam_problems,                                                 # no explicit IAM names
     unscoped_name_problems,                                             # stack-scoped names

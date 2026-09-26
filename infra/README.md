@@ -60,12 +60,19 @@ aws cloudformation delete-stack --stack-name clickstream-foundation --region ap-
 
 ```bash
 cd infra
-sam build --template-file <tier>/template.yaml                     # package code into .aws-sam/ (gitignored)
-sam deploy --config-env <tier> --no-execute-changeset              # create a change set only
+sam build --template-file <tier>/template.yaml --build-dir .aws-sam/<tier>   # one build folder per tier (gitignored)
+sam deploy --config-env <tier> --template-file .aws-sam/<tier>/template.yaml --no-execute-changeset  # create a change set only
 # review the change set in the CloudFormation console: IAM resources first
-# then execute it from the console (or rerun sam deploy without --no-execute-changeset)
+# then execute THAT change set from the console; rerunning sam deploy would create a new, unreviewed one
 sam delete --stack-name clickstream-<tier> --region ap-south-1     # teardown at the end of the window
 ```
+
+Each tier gets its own build folder, so building one tier can never overwrite
+the packaged template another tier is about to deploy.
+
+The foundation bucket deletes packaged code after 30 days. Stacks here are torn
+down after every window, so this never matters in practice; a stack kept longer
+than 30 days would need a fresh `sam build` + `sam deploy` before any rollback.
 
 Record every window (created, torn down, measured cost) in the teardown log
 in [`docs/cost-model.md`](../docs/cost-model.md).
