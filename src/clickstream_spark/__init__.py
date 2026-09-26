@@ -1,0 +1,1 @@
+"""Spark version of the clickstream pipeline for AWS Glue (tier T1); clickstream/ stays the tested pandas reference."""  # package docstring (no imports: the Glue zip import test runs without pyspark)

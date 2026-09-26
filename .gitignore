@@ -44,6 +44,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+# Glue library zip built by scripts/build_glue_libs.py (regenerable)
+/build/
 
 # ── Editor / OS ───────────────────────────────────────────────
 .vscode/

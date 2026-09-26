@@ -12,7 +12,7 @@ jobs:                                                     # jobs run in parallel
       - uses: actions/checkout@v4                         # fetch the repository
       - name: Fail if local-only files are tracked        # .env, CLAUDE.md, workflow_status*.md must never be in git
         run: |                                            # shell script below
-          if git ls-files | grep -E '(^|/)(\.env|CLAUDE\.md|workflow_status[^/]*\.md)$'; then echo "Local-only file is tracked"; exit 1; fi
+          if git ls-files | grep -E '(^|/)(\.env(\.[^/]*)?|CLAUDE\.md|workflow_status[^/]*\.md)$' | grep -vE '(^|/)\.env\.example$'; then echo "Local-only file is tracked"; exit 1; fi
 
   test:                                                   # lint and unit tests
     runs-on: ubuntu-latest                                # Linux runner
@@ -21,15 +21,23 @@ jobs:                                                     # jobs run in parallel
       - uses: actions/setup-python@v5                     # install Python
         with:                                             # setup options
           python-version: "3.11"                          # matches requires-python
+      - uses: actions/setup-java@v4                       # Java for local Spark (PySpark 4.1.1 needs 17 or 21)
+        with:                                             # setup options
+          distribution: temurin                           # Eclipse Temurin JDK
+          java-version: "17"                              # same Java as AWS Glue 6.0
+      - uses: actions/cache@v4                            # reuse the UCI zip between runs
+        with:                                             # cache options
+          path: data/uci553.zip                           # the downloaded file
+          key: uci553-bf7a47493025ffb35eebc7a65caf9988    # keyed on its MD5, so a changed file is a new key
       - name: Install package and dev tools               # same pins as local
-        run: python -m pip install -e ".[dev]"            # editable install with pytest and ruff
+        run: python -m pip install -e ".[dev,spark]"          # editable install with pytest, ruff, boto3 and pyspark
       - name: Lint                                        # static checks
         run: python -m ruff check src tests               # fails on lint errors
       - name: Lint CloudFormation templates               # cfn-lint reads .cfnlintrc (infra templates, Mumbai)
         run: cfn-lint                                     # fails on template errors; no AWS credentials needed
       - name: Download UCI dataset 553 and verify its checksum  # makes the full-file test run in CI
         run: |                                            # shell script below
-          curl -sSfL -o data/uci553.zip "https://archive.ics.uci.edu/static/public/553/clickstream+data+for+online+shopping.zip"  # canonical source
+          if [ ! -f data/uci553.zip ]; then curl -sSfL -o data/uci553.zip "https://archive.ics.uci.edu/static/public/553/clickstream+data+for+online+shopping.zip"; fi  # download unless cached
           echo "bf7a47493025ffb35eebc7a65caf9988  data/uci553.zip" | md5sum -c -  # fail if the file changed
           unzip -o -q data/uci553.zip -d data/            # extract the CSV and codebook
       - name: Test                                        # unit tests plus the full-file reconciliation

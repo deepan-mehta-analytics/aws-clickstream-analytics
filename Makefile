@@ -32,7 +32,7 @@ local-run:
 
 # Fail if any local-only file is tracked by git
 check-hygiene:
-	@if git ls-files | grep -E '(^|/)(\.env|CLAUDE\.md|workflow_status[^/]*\.md)$$'; then echo "Local-only file is tracked"; exit 1; fi
+	@if git ls-files | grep -E '(^|/)(\.env(\.[^/]*)?|CLAUDE\.md|workflow_status[^/]*\.md)$$' | grep -vE '(^|/)\.env\.example$$'; then echo "Local-only file is tracked"; exit 1; fi
 
 # ── Cloud targets (owner-run only) ────────────────────────────
 # Cloud deploy is owner-run only (ADR-0004)

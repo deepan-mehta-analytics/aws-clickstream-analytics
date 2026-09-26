@@ -21,6 +21,11 @@ dev = [                                                 # development-only tools
     "ruff==0.15.12",                                    # Python linter
     "pyyaml==6.0.3",                                    # parses CloudFormation templates in the infra tests
     "cfn-lint==1.57.0",                                 # validates CloudFormation templates against the AWS spec
+    "boto3==1.42.84",                                   # AWS SDK for the Lambda tests (same version as the Glue 6.0 runtime)
+]
+
+spark = [                                               # local Spark for the Glue job tests (needs Java 17 or 21)
+    "pyspark==4.1.1",                                   # same Spark version as AWS Glue 6.0
 ]
 
 # ── Package discovery ─────────────────────────────────────────
