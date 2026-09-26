@@ -42,6 +42,14 @@ All figures fetched 2026-09-25 from the page listed. Prices are for us-east-1.
 | Amazon Quick / QuickSight | BI Author · Reader | $24 · $3 per user/month | None; a Quick 30-day trial waives fees for up to 25 users (whether it covers a BI Author is unverified) | aws.amazon.com/quicksight/pricing/ + /quick/pricing/ |
 | Amazon Quick | Free · Plus plans | $0 · $20–25 per user/month | Neither can author dashboards | aws.amazon.com/quick/pricing/ |
 
+**Encryption choice (ADR-0004, 2026-09-26):** every bucket uses SSE-S3,
+which has no key charge. A customer managed KMS key was rejected: $1 per
+key version per month in Mumbai, plus $0.03 per 10,000 requests beyond the
+free tier (Price List API `awskms` `ap-south-1`, published 2026-09-11), and
+deletion needs a 7–30 day waiting period. The IaC artifacts bucket
+(foundation stack) holds only small packaged-code objects with a short
+expiry; its cost is expected to be negligible (not yet measured).
+
 **Not yet verified:** Glue minimum DPUs per Spark job and the Python-shell
 DPU size; provisioned Redshift dc2/ra3 hourly prices (the table did not
 render); Kinesis per-shard write limits; whether Firehose format conversion

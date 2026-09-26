@@ -8,11 +8,11 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 8 designed · 104 not started**
-(as of 2026-09-25; the local twin, tier T0, is built and run; no cloud run exists yet).
+**Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 15 designed · 97 not started**
+(as of 2026-09-26; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
 
-**Plan: 58 planned · 36 stretch · 26 not planned.** Planned skills by
-domain: D1 21/37, D2 11/26, D3 17/28, D4 9/29. Security and governance
+**Plan: 60 planned · 34 stretch · 26 not planned.** Planned skills by
+domain: D1 23/37, D2 11/26, D3 17/28, D4 9/29. Security and governance
 (D4) is the thinnest area, because several of its skills need AWS
 Organizations, multiple accounts or paid services outside this project's
 scope. Eleven skills (6 planned, 5 stretch) depend on the streaming and
@@ -83,10 +83,10 @@ Accepted 2026-09-25):
 | 1.4.2 | Tune Lambda concurrency and performance | Stretch | Generator concurrency settings | ⬜ |
 | 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
 | 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
-| 1.4.5 | Deploy with IaC | Planned | IaC for every resource (tool choice open, G-13) | ⬜ |
-| 1.4.6 | Package serverless pipelines with SAM | Stretch | Depends on the IaC choice | ⬜ |
+| 1.4.5 | Deploy with IaC | Planned | One SAM-extended CloudFormation stack per tier, owner-deployed via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 1.4.6 | Package serverless pipelines with SAM | Planned | `sam build` / `sam deploy` of the tier templates; `sam local invoke` of the ingest Lambda ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 1.4.7 | Mount storage in Lambda | Not planned | — | ⬜ |
-| 1.4.8 | Repeatable deploys with CloudFormation/CDK | Stretch | Depends on the IaC choice (G-13) | ⬜ |
+| 1.4.8 | Repeatable deploys with CloudFormation/CDK | Planned | CloudFormation stacks (SAM transform), deployed and deleted per working window ([ADR-0004](adr/0004-iac-sam-cloudformation.md)); CDK rejected | 🟡 |
 | 1.4.9 | CI/CD for data pipelines | Planned | GitHub Actions | ⬜ |
 | 1.4.10 | Distributed computing concepts | Planned | Spark in Glue, with a concept note | ⬜ |
 | 1.4.11 | Data structures and algorithms | Not planned | — | ⬜ |
@@ -205,9 +205,9 @@ repo defines roles and policies; the owner applies them.
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 4.1.1 | Update VPC security groups | Stretch | Redshift Serverless workgroup security group | ⬜ |
-| 4.1.2 | Manage IAM groups, roles and endpoints | Planned | IaC-defined roles | ⬜ |
+| 4.1.2 | Manage IAM groups, roles and endpoints | Planned | IaC-defined roles ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 4.1.3 | Create and rotate credentials in Secrets Manager | Stretch | Secrets Manager cost not yet verified | ⬜ |
-| 4.1.4 | Roles for service access | Planned | Lambda, Glue, Firehose, Redshift roles | ⬜ |
+| 4.1.4 | Roles for service access | Planned | Lambda, Glue, Firehose, Redshift roles, one per service ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 4.1.5 | Policies on access points and endpoints | Stretch | — | ⬜ |
 | 4.1.6 | Managed vs unmanaged services | Planned | ADR discussion | ⬜ |
 | 4.1.7 | SageMaker Unified Studio domains/projects | Not planned | — | ⬜ |
@@ -216,19 +216,19 @@ repo defines roles and policies; the owner applies them.
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 4.2.1 | Write custom IAM policies | Planned | Scoped IaC policies | ⬜ |
+| 4.2.1 | Write custom IAM policies | Planned | Scoped IaC policies ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 4.2.2 | Store app and database credentials | Stretch | Parameter Store or Secrets Manager | ⬜ |
 | 4.2.3 | Database users, groups and roles | Planned | Redshift read-only analyst role | ⬜ |
 | 4.2.4 | Permissions via Lake Formation | Stretch | — | ⬜ |
 | 4.2.5 | Role-, tag- and attribute-based access | Stretch | — | ⬜ |
-| 4.2.6 | Least-privilege policies | Planned | Per-service scoped policies | ⬜ |
+| 4.2.6 | Least-privilege policies | Planned | Per-service policies scoped to bucket/prefix ARNs, enforced by template tests ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 
 ### Task 4.3: Encryption and masking
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 4.3.1 | Mask and anonymise data | Planned | Hashed user IDs | ⬜ |
-| 4.3.2 | Encrypt with KMS keys | Stretch | KMS vs SSE-S3 decision (G-13) | ⬜ |
+| 4.3.2 | Encrypt with KMS keys | Stretch | SSE-S3 chosen; KMS key rejected for cost and deletion wait ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | ⬜ |
 | 4.3.3 | Cross-account encryption | Not planned | Single account | ⬜ |
 | 4.3.4 | Encryption in transit | Planned | TLS-only bucket policy | ⬜ |
 

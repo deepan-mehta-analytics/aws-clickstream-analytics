@@ -65,6 +65,7 @@ a Redshift Serverless window, and a Streamlit dashboard. See the Roadmap.
 | Linting | ruff | Static checks |
 | CI | GitHub Actions | Hygiene, lint and tests; downloads the dataset and verifies its MD5 (runs once the repo has a remote) |
 | Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
+| Infrastructure as code (planned) | AWS SAM + CloudFormation, `cfn-lint` | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
 | Dashboard (planned) | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
 
 ---
@@ -108,6 +109,7 @@ Design decisions are recorded as ADRs:
 - [ADR-0001: hybrid stack in Mumbai](docs/adr/0001-ingest-and-warehouse-stack.md), with a [cost-tier and SWOT annex](docs/adr/0001-hybrid-cost-tiers.md)
 - [ADR-0002: Streamlit dashboard](docs/adr/0002-dashboard-streamlit.md)
 - [ADR-0003: data model](docs/adr/0003-data-model.md)
+- [ADR-0004: infrastructure as code (SAM + CloudFormation) and security baseline](docs/adr/0004-iac-sam-cloudformation.md)
 
 ---
 
@@ -120,7 +122,7 @@ aws-clickstream-analytics/
 ├── tests/                      ← 45 pytest tests incl. full-file reconciliation
 ├── data/README.md              ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
-│   ├── adr/                    ← architecture decision records (0001–0003 + cost annex)
+│   ├── adr/                    ← architecture decision records (0001–0004 + cost annex)
 │   ├── data-dictionary.md      ← every table and column in plain words
 │   ├── cost-model.md           ← verified AWS prices and teardown log
 │   ├── exam-guide-map.md       ← DEA-C01 skills-coverage matrix
@@ -220,8 +222,8 @@ teardown. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 
 A [skills-coverage matrix](docs/exam-guide-map.md) maps all 120 skills in exam
 guide v1.1 to evidence in this repo. It is a coverage matrix, not exam prep.
-**8 of 120 skills are shown** (by the local run and tests), **8 are designed**
-in ADRs, and **104 are not started**. It is honest by construction: nothing
+**8 of 120 skills are shown** (by the local run and tests), **15 are designed**
+in ADRs, and **97 are not started**. It is honest by construction: nothing
 is marked shown without a real run behind it.
 
 ---
@@ -233,7 +235,8 @@ is marked shown without a real run behind it.
 - **Time of day and device are synthetic:** generated from a fixed seed, and labelled `_synthetic` everywhere.
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%).
 - **No AWS resources exist yet:** the cloud tiers are designed and priced, not built.
-- **The infrastructure-as-code tool is undecided** ([GAPS G-13](docs/GAPS.md)).
+- **Infrastructure as code is designed, not written:** AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). No template exists yet.
+- **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)).
 
 ## 🔜 Roadmap
 

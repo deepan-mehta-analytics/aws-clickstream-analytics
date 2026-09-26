@@ -87,6 +87,12 @@ Skill counts are a planning split of the 58 "Planned" rows in
 [`exam-guide-map.md`](../exam-guide-map.md), grouped by the first tier
 where each can be exercised. They are not yet shown.
 
+Update 2026-09-26: [ADR-0004](0004-iac-sam-cloudformation.md) moved 1.4.6
+(SAM) and 1.4.8 (CloudFormation) from stretch to planned, so there are now
+60 planned rows. Both first land in T1, which takes T1 to 31 (39) and each
+later cumulative figure up by 2 (T5: 60). The table above keeps the
+figures as they were accepted.
+
 ---
 
 ## 3. SWOT per tier
