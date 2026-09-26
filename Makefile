@@ -34,11 +34,11 @@ local-run:
 check-hygiene:
 	@if git ls-files | grep -E '(^|/)(\.env|CLAUDE\.md|workflow_status[^/]*\.md)$$'; then echo "Local-only file is tracked"; exit 1; fi
 
-# ── Cloud targets (not built yet) ─────────────────────────────
-# Cloud deploy arrives with tier T1 (see docs/adr/0001-hybrid-cost-tiers.md)
+# ── Cloud targets (owner-run only) ────────────────────────────
+# Cloud deploy is owner-run only (ADR-0004)
 deploy:
-	@echo "Not built yet: cloud tiers start at T1 (ADR-0001 annex)"; exit 1
+	@echo "Owner-run only: see infra/README.md (sam deploy with a reviewed change set)"; exit 1
 
-# Cloud teardown arrives with tier T1
+# Cloud teardown is owner-run only (ADR-0004)
 teardown:
-	@echo "Not built yet: nothing is deployed"; exit 1
+	@echo "Owner-run only: see infra/README.md (sam delete, then log it in docs/cost-model.md)"; exit 1

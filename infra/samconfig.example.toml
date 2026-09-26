@@ -1,0 +1,10 @@
+# ── AWS SAM CLI settings (example; copy to infra/samconfig.toml, which is gitignored) ──
+version = 0.1                                             # samconfig file format version
+
+[t1-lake.deploy.parameters]                               # used by: sam deploy --config-env t1-lake
+stack_name = "clickstream-t1-lake"                        # CloudFormation stack name for tier T1
+region = "ap-south-1"                                     # Mumbai (ADR-0001)
+s3_bucket = "<ArtifactsBucketName output of the clickstream-foundation stack>"  # packaged-code bucket
+s3_prefix = "t1-lake"                                     # folder inside the artifacts bucket
+capabilities = "CAPABILITY_IAM"                           # templates create unnamed IAM roles
+confirm_changeset = true                                  # always show the change set before applying

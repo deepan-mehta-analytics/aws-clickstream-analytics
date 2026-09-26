@@ -24,6 +24,9 @@ credentials
 *.tfvars
 terraform.tfvars
 cdk.out/
+# AWS SAM: real config holds the owner's bucket name; build output is regenerable
+infra/**/samconfig.toml
+.aws-sam/
 
 # ── Local data (large / regenerable datasets) ─────────────────
 /data/*
