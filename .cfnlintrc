@@ -1,0 +1,5 @@
+# ── cfn-lint settings: which templates, which region ─────────
+templates:                                                 # templates linted when cfn-lint runs with no arguments
+  - infra/*/template.yaml                                  # one template per stack folder
+regions:                                                   # validate resource types against this region
+  - ap-south-1                                             # Mumbai (ADR-0001)

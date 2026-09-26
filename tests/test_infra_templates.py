@@ -1,16 +1,21 @@
 # ── Tests: infrastructure template guardrails (ADR-0004) ──────
 from pathlib import Path                                                # file paths
 
-from infra_rules import (                                               # rules under test
+import pytest                                                           # parametrize over real templates
+
+from infra_rules import (                                               # rules and helpers under test
+    ALL_TEMPLATE_RULES,                                                 # every template rule
+    INFRA_FOLDER,                                                       # repo-root/infra
     account_id_problems,                                                # no 12-digit numbers
     iam_user_problems,                                                  # no IAM users or keys
     insecure_transport_problems,                                        # TLS-only bucket policies
-    named_iam_problems,                                                 # IAM names left to CloudFormation
+    load_template,                                                      # parse a real template
+    named_iam_problems,                                                  # IAM names left to CloudFormation
     public_bucket_problems,                                             # Block Public Access on
+    template_paths,                                                     # every infra/*/template.yaml
     unencrypted_bucket_problems,                                        # encryption at rest on
     unscoped_name_problems,                                             # names built from the stack name
     wildcard_action_problems,                                           # no Action "*"
-    ALL_TEMPLATE_RULES,                                                 # every template rule
 )
 
 # ── Hand-made templates ───────────────────────────────────────
@@ -122,3 +127,19 @@ def test_rules_tolerate_empty_template():                               # Review
     for rule in ALL_TEMPLATE_RULES:                                     # every template rule
         assert rule({}) == [], rule.__name__                            # empty template: nothing to flag, no crash
         assert rule({"Resources": None}) == [], rule.__name__           # empty Resources section: same
+
+
+# ── Real templates under infra/ ───────────────────────────────
+def test_at_least_one_template_exists():                                # guards the loop below from passing on nothing
+    assert [path.parent.name for path in template_paths()] != [], "no infra/*/template.yaml found"  # at least one stack
+
+
+@pytest.mark.parametrize("path", template_paths(), ids=lambda path: path.parent.name)  # one case per stack folder
+def test_real_template_passes_every_rule(path):                         # every rule on every real template
+    template = load_template(path)                                      # parse the template
+    problems = [problem for rule in ALL_TEMPLATE_RULES for problem in rule(template)]  # run every rule
+    assert problems == []                                               # no guardrail broken
+
+
+def test_infra_folder_has_no_account_ids():                             # every committed infra text file
+    assert account_id_problems(INFRA_FOLDER) == []                      # no 12-digit numbers anywhere

@@ -25,6 +25,8 @@ jobs:                                                     # jobs run in parallel
         run: python -m pip install -e ".[dev]"            # editable install with pytest and ruff
       - name: Lint                                        # static checks
         run: python -m ruff check src tests               # fails on lint errors
+      - name: Lint CloudFormation templates               # cfn-lint reads .cfnlintrc (infra templates, Mumbai)
+        run: cfn-lint                                     # fails on template errors; no AWS credentials needed
       - name: Download UCI dataset 553 and verify its checksum  # makes the full-file test run in CI
         run: |                                            # shell script below
           curl -sSfL -o data/uci553.zip "https://archive.ics.uci.edu/static/public/553/clickstream+data+for+online+shopping.zip"  # canonical source

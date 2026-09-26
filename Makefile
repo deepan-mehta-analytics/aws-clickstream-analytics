@@ -2,8 +2,11 @@
 # Python interpreter inside the project virtual environment (Linux/macOS path)
 PYTHON ?= .venv/bin/python
 
+# cfn-lint inside the project virtual environment (Linux/macOS path)
+CFN_LINT ?= .venv/bin/cfn-lint
+
 # Targets below are commands, not files
-.PHONY: install lint test local-run check-hygiene deploy teardown
+.PHONY: install lint lint-infra test local-run check-hygiene deploy teardown
 
 # ── Local targets (working) ───────────────────────────────────
 # Install the package and dev tools into the virtual environment
@@ -13,6 +16,11 @@ install:
 # Lint all Python code
 lint:
 	$(PYTHON) -m ruff check src tests
+
+# Lint CloudFormation templates and run the template guardrail tests (no AWS credentials needed)
+lint-infra:
+	$(CFN_LINT)
+	$(PYTHON) -m pytest -v tests/test_infra_templates.py
 
 # Run the test suite
 test:

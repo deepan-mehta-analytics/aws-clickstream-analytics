@@ -1,0 +1,58 @@
+# ── Foundation stack: artifacts bucket for packaged code (ADR-0004) ──
+AWSTemplateFormatVersion: "2010-09-09"                     # CloudFormation template format version
+Description: >-                                            # shown in the CloudFormation console
+  Artifacts bucket for packaged Lambda code and templates (sam deploy --s3-bucket).
+  Encrypted with SSE-S3, private, TLS only; objects expire after 30 days.
+
+Resources:                                                 # everything this stack creates
+  # ── Artifacts bucket ────────────────────────────────────────
+  ArtifactsBucket:                                         # holds packaged code uploaded by sam deploy
+    Type: AWS::S3::Bucket                                  # S3 bucket
+    DeletionPolicy: Delete                                 # stack deletion removes the (emptied) bucket
+    UpdateReplacePolicy: Delete                            # replacement removes the old bucket too
+    Properties:                                            # bucket settings; no BucketName, so CloudFormation generates one
+      BucketEncryption:                                    # encryption at rest
+        ServerSideEncryptionConfiguration:                 # one default-encryption rule
+          - ServerSideEncryptionByDefault:                 # applied to every new object
+              SSEAlgorithm: AES256                         # SSE-S3 (no KMS key charge)
+      PublicAccessBlockConfiguration:                      # never public
+        BlockPublicAcls: true                              # reject public ACLs
+        BlockPublicPolicy: true                            # reject public bucket policies
+        IgnorePublicAcls: true                             # ignore any public ACL that exists
+        RestrictPublicBuckets: true                        # restrict access if a public policy slips through
+      OwnershipControls:                                   # object ownership
+        Rules:                                             # one ownership rule
+          - ObjectOwnership: BucketOwnerEnforced           # ACLs disabled; the bucket owner owns every object
+      LifecycleConfiguration:                              # automatic clean-up
+        Rules:                                             # two rules
+          - Id: ExpirePackagedCode                         # packaged code is regenerable by sam build
+            Status: Enabled                                # rule active
+            ExpirationInDays: 30                           # delete objects after 30 days
+          - Id: AbortUnfinishedUploads                     # stray multipart uploads cost storage
+            Status: Enabled                                # rule active
+            AbortIncompleteMultipartUpload:                # clean-up of partial uploads
+              DaysAfterInitiation: 1                       # after one day
+
+  # ── TLS-only access ─────────────────────────────────────────
+  ArtifactsBucketPolicy:                                   # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                            # S3 bucket policy
+    Properties:                                            # policy settings
+      Bucket: !Ref ArtifactsBucket                         # attached to the artifacts bucket
+      PolicyDocument:                                      # IAM policy document
+        Version: "2012-10-17"                              # current policy language version
+        Statement:                                         # one statement
+          - Sid: DenyRequestsWithoutTls                    # statement label
+            Effect: Deny                                   # explicit deny beats any allow
+            Principal: "*"                                 # applies to every caller
+            Action: "s3:*"                                 # every S3 action
+            Resource:                                      # the bucket and every object in it
+              - !GetAtt ArtifactsBucket.Arn                # the bucket itself
+              - !Sub "${ArtifactsBucket.Arn}/*"            # every object in the bucket
+            Condition:                                     # only when...
+              Bool:                                        # boolean condition
+                aws:SecureTransport: "false"               # ...the request did not use TLS
+
+Outputs:                                                   # values the owner copies into samconfig.toml
+  ArtifactsBucketName:                                     # generated bucket name
+    Description: Pass to sam deploy as --s3-bucket (or s3_bucket in samconfig.toml)  # how to use it
+    Value: !Ref ArtifactsBucket                            # !Ref on a bucket returns its name
