@@ -61,7 +61,7 @@ a Redshift Serverless window, and a Streamlit dashboard. See the Roadmap.
 | Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| Testing | pytest 9 | 70 tests, including full-file reconciliation and template guardrails |
+| Testing | pytest 9 | 72 tests, including full-file reconciliation, template guardrails and a local Spark harness |
 | Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
 | CI | GitHub Actions | Hygiene, lint and tests; downloads the dataset and verifies its MD5 (runs once the repo has a remote) |
 | Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
@@ -119,7 +119,7 @@ Design decisions are recorded as ADRs:
 aws-clickstream-analytics/
 ├── src/clickstream/            ← the pipeline package, one module per stage
 ├── sql/summaries/              ← dashboard SQL, portable to Athena/Redshift
-├── tests/                      ← 70 pytest tests incl. full-file reconciliation and template guardrails
+├── tests/                      ← 72 pytest tests incl. full-file reconciliation, template guardrails, Spark harness
 ├── data/README.md              ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                    ← architecture decision records (0001–0004 + cost annex)
@@ -180,7 +180,7 @@ has not run yet, because the repository has no remote.
 .venv/Scripts/cfn-lint
 ```
 
-70 tests. They cover:
+72 tests. They cover:
 - the reader and codebook;
 - repeatable seeded enrichment, including a 195-click visit near midnight;
 - Bronze resends;
@@ -189,7 +189,8 @@ has not run yet, because the repository has no remote.
 - the SQL summaries;
 - the end-to-end run;
 - `test_full_file.py`, which checks the real file against the measured stats. It is skipped when the dataset is not downloaded;
-- `test_infra_templates.py`, which checks every CloudFormation template for encryption, private buckets, TLS-only policies, safe IAM (no admin or public grants) and no account IDs in any committed file.
+- `test_infra_templates.py`, which checks every CloudFormation template for encryption, private buckets, TLS-only policies, safe IAM (no admin or public grants) and no account IDs in any committed file;
+- `test_spark_session.py`, which checks the local Spark session uses the same settings as the AWS Glue 6.0 job (tier T1, in progress). Spark tests need `pip install -e ".[dev,spark]"` and Java 17 or 21 (`SPARK_JAVA_HOME`); without them they are skipped with a clear reason.
 
 ---
 
