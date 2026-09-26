@@ -130,7 +130,7 @@ aws-clickstream-analytics/
 │   └── GAPS.md                 ← what is verified, open or accepted as a limitation
 ├── infra/                      ← CloudFormation/SAM stacks (foundation written; owner-deployed only)
 ├── glue/  dashboards/          ← placeholders for the cloud tiers (each has a README)
-├── .github/workflows/ci.yml    ← hygiene, lint, tests
+├── .github/workflows/ci.yml    ← hygiene, lint (ruff + cfn-lint), tests
 ├── Makefile                    ← working local targets; cloud targets say "owner-run only"
 ├── pyproject.toml              ← package and pinned dependencies
 ├── PROJECT-STATUS.md           ← phase-by-phase status
@@ -166,8 +166,8 @@ and `quality_report.json`.
 
 ### ☁️ Option 2 — GitHub Actions
 
-`.github/workflows/ci.yml` runs the hygiene check, lint and the full test
-suite on every push. It downloads the dataset and checks its MD5 first. It
+`.github/workflows/ci.yml` runs the hygiene check, ruff, cfn-lint and the
+full test suite on every push. It downloads the dataset and checks its MD5 first. It
 has not run yet, because the repository has no remote.
 
 ---
