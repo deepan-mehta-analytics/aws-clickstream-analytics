@@ -29,7 +29,7 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 | 7 — Live demo window + teardown | ⏳ Pending | |
 
 ## Last commit
-`9b55ca5` (foundation stack + cfn-lint in CI), followed by the infra guide docs commit on `main`; no remote configured yet.
+`c138873` (26 exam skills promoted to planned), followed by this status refresh on `main`; no remote configured yet.
 
 ## Metrics
 From a **local run (tier T0)** on the full UCI file, 2026-09-25: 165,474 source clicks, 0 rejected, 165,474 Silver clicks, 24,026 visits, 5,042 one-click visits, 1 reported category mismatch (A18); browse-depth funnel 24,026 / 14,504 / 9,125 / 4,779 / 1,631. As of 2026-09-26, 70 tests pass (45 pipeline + 25 infrastructure-template guardrails). No AWS metric exists yet; none is reported until measured from a real cloud run.
