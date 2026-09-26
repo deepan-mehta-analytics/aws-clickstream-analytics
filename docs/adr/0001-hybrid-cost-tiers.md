@@ -90,8 +90,11 @@ where each can be exercised. They are not yet shown.
 Update 2026-09-26: [ADR-0004](0004-iac-sam-cloudformation.md) moved 1.4.6
 (SAM) and 1.4.8 (CloudFormation) from stretch to planned, so there are now
 60 planned rows. Both first land in T1, which takes T1 to 31 (39) and each
-later cumulative figure up by 2 (T5: 60). The table above keeps the
-figures as they were accepted.
+later cumulative figure up by 2 (T5: 60). A second update the same day
+promoted 26 stretch skills to planned as low-cost add-ons (T1 +15, T2 +8,
+T3 +2, T4 +1), giving 86 planned rows: T0 8 (8), T1 46 (54), T2 23 (77),
+T3 3 (80), T4 5 (85), T5 1 (86). The table above keeps the figures as they
+were accepted.
 
 ---
 

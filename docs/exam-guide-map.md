@@ -11,12 +11,16 @@ wording below is **paraphrased**; the official guide is the authority.
 **Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 15 designed · 97 not started**
 (as of 2026-09-26; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
 
-**Plan: 60 planned · 34 stretch · 26 not planned.** Planned skills by
-domain: D1 23/37, D2 11/26, D3 17/28, D4 9/29. Security and governance
-(D4) is the thinnest area, because several of its skills need AWS
-Organizations, multiple accounts or paid services outside this project's
-scope. Eleven skills (6 planned, 5 stretch) depend on the streaming and
-Redshift window in ADR-0001, and would be lost with a batch-only design.
+**Plan: 86 planned · 8 stretch · 26 not planned.** Planned skills by
+domain: D1 31/37, D2 16/26, D3 24/28, D4 15/29. On 2026-09-26, 26 stretch
+skills were promoted to planned as low-cost add-ons to tiers T1–T4 (each row
+names its tier); the costs of Glue Data Quality, Lake Formation, CloudTrail,
+Logs Insights and Parameter Store are to be verified before T2 is built.
+Security and governance (D4) is still the thinnest area, because several of
+its skills need AWS Organizations, multiple accounts or paid services outside
+this project's scope. Ten skills (9 planned, 1 stretch) depend on the
+streaming and Redshift window in ADR-0001, and would be lost with a
+batch-only design.
 
 Status legend:
 - ✅ **shown**: runnable and exercised in a real run, with evidence linked.
@@ -41,13 +45,13 @@ Accepted 2026-09-25):
 | 1.1.1 | Consume from streaming sources | Planned | Kinesis Data Streams → Firehose in a streaming window | ⬜ |
 | 1.1.2 | Consume from batch sources | Planned | S3 Bronze read by Glue | ⬜ |
 | 1.1.3 | Configure batch ingestion options | Planned | Glue job bookmarks and partition pruning | ⬜ |
-| 1.1.4 | Consume data APIs | Stretch | Generator pulling reference data from a public API | ⬜ |
+| 1.1.4 | Consume data APIs | Planned | T1: Lambda pulls reference data (for example currency rates) from a free public API into Bronze | ⬜ |
 | 1.1.5 | Schedule jobs and crawlers | Planned | EventBridge schedule for the batch job | ⬜ |
 | 1.1.6 | Trigger on events | Planned | S3 event notification → Lambda | ⬜ |
-| 1.1.7 | Invoke Lambda from Kinesis | Stretch | Lambda consumer on the stream | ⬜ |
+| 1.1.7 | Invoke Lambda from Kinesis | Planned | T3: Lambda consumer on the Kinesis stream (event source mapping) | ⬜ |
 | 1.1.8 | IP allowlists for data-source access | Not planned | No private data sources | ⬜ |
-| 1.1.9 | Handle throttling and rate limits | Stretch | Producer retry and backoff on Kinesis | ⬜ |
-| 1.1.10 | Fan-in / fan-out for streams | Stretch | Second consumer (enhanced fan-out is extra cost) | ⬜ |
+| 1.1.9 | Handle throttling and rate limits | Planned | T1: producer retries with exponential backoff on throttling, tested locally first | ⬜ |
+| 1.1.10 | Fan-in / fan-out for streams | Planned | T3: two standard consumers on one stream (Firehose + Lambda); enhanced fan-out explained, not bought | ⬜ |
 | 1.1.11 | Replayable ingestion | Planned | Immutable raw Bronze in S3 plus stream retention | ⬜ |
 | 1.1.12 | Stateful vs stateless processing | Planned | `build_visits` aggregates clicks per real visit (stateful), Silver cleans per click (stateless): `src/clickstream/gold.py`, `tests/test_gold.py` (local run, tier T0) | ✅ |
 
@@ -56,8 +60,8 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 1.2.1 | Tune container workloads | Not planned | No containers in the design | ⬜ |
-| 1.2.2 | Connect via JDBC/ODBC | Stretch | Redshift JDBC connection from a client | ⬜ |
-| 1.2.3 | Integrate multiple sources | Stretch | Join clickstream with page and user reference data | ⬜ |
+| 1.2.2 | Connect via JDBC/ODBC | Planned | T4: JDBC connection from a local SQL client to Redshift Serverless | ⬜ |
+| 1.2.3 | Integrate multiple sources | Planned | T1: clickstream joined with the public-API reference data (1.1.4) in Gold | ⬜ |
 | 1.2.4 | Keep processing costs down | Planned | [`cost-model.md`](cost-model.md), ADR-0001 | 🟡 |
 | 1.2.5 | Pick transformation services to fit requirements | Planned | Glue, Lambda, Redshift SQL | ⬜ |
 | 1.2.6 | Convert between formats | Planned | CSV → Parquet at every layer: `src/clickstream/local_run.py` (local run, tier T0); Firehose JSON → Parquet still to come | ✅ |
@@ -79,8 +83,8 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 1.4.1 | Reduce ingest/transform runtime | Stretch | Before/after job timing | ⬜ |
-| 1.4.2 | Tune Lambda concurrency and performance | Stretch | Generator concurrency settings | ⬜ |
+| 1.4.1 | Reduce ingest/transform runtime | Planned | T1: measured before/after runtime and bytes scanned (CSV vs Parquet, partition pruning) | ⬜ |
+| 1.4.2 | Tune Lambda concurrency and performance | Planned | T1: reserved concurrency and memory settings on the ingest Lambda, in the SAM template | ⬜ |
 | 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
 | 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
 | 1.4.5 | Deploy with IaC | Planned | One SAM-extended CloudFormation stack per tier, owner-deployed via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
@@ -105,7 +109,7 @@ Accepted 2026-09-25):
 | 2.1.4 | Migration tools such as Transfer Family | Not planned | — | ⬜ |
 | 2.1.5 | Federated queries, materialized views, Spectrum | Planned | Redshift Spectrum over S3 or a materialized view | ⬜ |
 | 2.1.6 | Manage locks | Not planned | — | ⬜ |
-| 2.1.7 | Open table formats (Iceberg) | Stretch | Iceberg table for Silver | ⬜ |
+| 2.1.7 | Open table formats (Iceberg) | Planned | T1: Silver as an Apache Iceberg table queried by Athena | ⬜ |
 | 2.1.8 | Vector index types | Not planned | — | ⬜ |
 
 ### Task 2.2: Data cataloging
@@ -114,7 +118,7 @@ Accepted 2026-09-25):
 |---|---|---|---|---|
 | 2.2.1 | Query source data through a catalog | Planned | Athena via Glue Data Catalog | ⬜ |
 | 2.2.2 | Build a technical catalog | Planned | Glue Data Catalog | ⬜ |
-| 2.2.3 | Discover schemas with crawlers | Stretch | Crawler vs IaC-defined tables (crawler cost) | ⬜ |
+| 2.2.3 | Discover schemas with crawlers | Planned | T1: one crawler run on Bronze compared with IaC-defined tables (crawler cost noted) | ⬜ |
 | 2.2.4 | Keep partitions in sync with the catalog | Planned | Athena partition projection on monthly partitions, [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.2.5 | Create catalog connections | Stretch | — | ⬜ |
 | 2.2.6 | Business data catalogs | Not planned | — | ⬜ |
@@ -126,8 +130,8 @@ Accepted 2026-09-25):
 | 2.3.1 | Load and unload between S3 and Redshift | Planned | `COPY` / `UNLOAD` in a streaming window | ⬜ |
 | 2.3.2 | Move data between tiers with Lifecycle rules | Planned | S3 Lifecycle on Bronze | ⬜ |
 | 2.3.3 | Expire aged data with Lifecycle rules | Planned | S3 Lifecycle expiry | ⬜ |
-| 2.3.4 | Versioning and TTL | Stretch | S3 versioning on Bronze | ⬜ |
-| 2.3.5 | Delete data for legal or business reasons | Stretch | User-deletion walkthrough | ⬜ |
+| 2.3.4 | Versioning and TTL | Planned | T1: S3 versioning on Bronze with a lifecycle rule expiring old versions | ⬜ |
+| 2.3.5 | Delete data for legal or business reasons | Planned | T1: delete one visit's rows from the Iceberg Silver table, with before/after counts | ⬜ |
 | 2.3.6 | Resiliency and availability | Stretch | — | ⬜ |
 
 ### Task 2.4: Data models and schema evolution
@@ -135,7 +139,7 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 2.4.1 | Design Redshift / DynamoDB / Lake Formation schemas | Planned | Two-grain star schema (clicks, visits), [ADR-0003](adr/0003-data-model.md) | 🟡 |
-| 2.4.2 | Handle changing data characteristics | Stretch | Schema-evolution test | ⬜ |
+| 2.4.2 | Handle changing data characteristics | Planned | T1: add a column to the Iceberg Silver table (schema evolution) without rewriting data | ⬜ |
 | 2.4.3 | Schema conversion tools | Not planned | — | ⬜ |
 | 2.4.4 | Data lineage tooling | Not planned | — | ⬜ |
 | 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet partitioned by month (`click_month`, `visit_month`) in `local_run.py` (local run, tier T0); Redshift sort and distribution keys still designed only, [ADR-0003](adr/0003-data-model.md) | ✅ |
@@ -174,24 +178,24 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 3.3.1 | Pull logs for audit | Stretch | — | ⬜ |
+| 3.3.1 | Pull logs for audit | Planned | T2: export CloudTrail event history for a working window | ⬜ |
 | 3.3.2 | Logging and monitoring for traceability | Planned | CloudWatch metrics and logs | ⬜ |
 | 3.3.3 | Alert from monitoring | Planned | CloudWatch alarm → SNS | ⬜ |
-| 3.3.4 | Troubleshoot performance | Stretch | — | ⬜ |
-| 3.3.5 | Track API calls with CloudTrail | Stretch | — | ⬜ |
+| 3.3.4 | Troubleshoot performance | Planned | T1: diagnose a slow Athena query from its statistics and fix it (partitions, Parquet) | ⬜ |
+| 3.3.5 | Track API calls with CloudTrail | Planned | T2: CloudTrail event history for the pipeline's API calls | ⬜ |
 | 3.3.6 | Troubleshoot and maintain Glue/EMR pipelines | Planned | Glue job runbook | ⬜ |
 | 3.3.7 | Log application data to CloudWatch Logs | Planned | Structured Lambda/Glue logs | ⬜ |
-| 3.3.8 | Analyze logs with AWS services | Stretch | CloudWatch Logs Insights queries | ⬜ |
+| 3.3.8 | Analyze logs with AWS services | Planned | T2: CloudWatch Logs Insights queries over Lambda and Glue logs | ⬜ |
 
 ### Task 3.4: Data quality
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 3.4.1 | Check quality during processing | Planned | Hard rules route failures to `clicks_rejected` with a reason: `src/clickstream/silver.py`, `tests/test_silver.py` (local run, tier T0) | ✅ |
-| 3.4.2 | Define quality rules | Stretch | Rule set (DataBrew or Glue Data Quality) | ⬜ |
+| 3.4.2 | Define quality rules | Planned | T2: AWS Glue Data Quality ruleset (DQDL) on Silver | ⬜ |
 | 3.4.3 | Investigate consistency | Stretch | Bronze → Silver → Gold counts reconciled with measured stats: `tests/test_full_file.py`, `quality_report.json` (local run, tier T0) | ✅ |
-| 3.4.4 | Sampling techniques | Stretch | — | ⬜ |
-| 3.4.5 | Handle data skew | Stretch | — | ⬜ |
+| 3.4.4 | Sampling techniques | Planned | T1: Athena TABLESAMPLE compared with a full scan | ⬜ |
+| 3.4.5 | Handle data skew | Planned | T1: country skew (Poland ≈ 81% of clicks) measured and handled in Spark | ⬜ |
 
 ---
 
@@ -208,7 +212,7 @@ repo defines roles and policies; the owner applies them.
 | 4.1.2 | Manage IAM groups, roles and endpoints | Planned | IaC-defined roles ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 4.1.3 | Create and rotate credentials in Secrets Manager | Stretch | Secrets Manager cost not yet verified | ⬜ |
 | 4.1.4 | Roles for service access | Planned | Lambda, Glue, Firehose, Redshift roles, one per service ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
-| 4.1.5 | Policies on access points and endpoints | Stretch | — | ⬜ |
+| 4.1.5 | Policies on access points and endpoints | Planned | T1: S3 access point for read-only analyst access to Gold | ⬜ |
 | 4.1.6 | Managed vs unmanaged services | Planned | ADR discussion | ⬜ |
 | 4.1.7 | SageMaker Unified Studio domains/projects | Not planned | — | ⬜ |
 
@@ -217,10 +221,10 @@ repo defines roles and policies; the owner applies them.
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 4.2.1 | Write custom IAM policies | Planned | Scoped IaC policies ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
-| 4.2.2 | Store app and database credentials | Stretch | Parameter Store or Secrets Manager | ⬜ |
+| 4.2.2 | Store app and database credentials | Planned | T1: pipeline configuration in SSM Parameter Store (standard parameters) | ⬜ |
 | 4.2.3 | Database users, groups and roles | Planned | Redshift read-only analyst role | ⬜ |
-| 4.2.4 | Permissions via Lake Formation | Stretch | — | ⬜ |
-| 4.2.5 | Role-, tag- and attribute-based access | Stretch | — | ⬜ |
+| 4.2.4 | Permissions via Lake Formation | Planned | T2: Lake Formation grants for a read-only analyst role | ⬜ |
+| 4.2.5 | Role-, tag- and attribute-based access | Planned | T2: Lake Formation tag-based access control (LF-Tags) | ⬜ |
 | 4.2.6 | Least-privilege policies | Planned | Per-service policies scoped to bucket/prefix ARNs, enforced by template tests ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 
 ### Task 4.3: Encryption and masking
@@ -236,10 +240,10 @@ repo defines roles and policies; the owner applies them.
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 4.4.1 | Track API calls with CloudTrail | Stretch | — | ⬜ |
+| 4.4.1 | Track API calls with CloudTrail | Planned | T2: same evidence as 3.3.5 (CloudTrail) | ⬜ |
 | 4.4.2 | Store app logs in CloudWatch Logs | Planned | Same as 3.3.7 | ⬜ |
 | 4.4.3 | Centralised queries with CloudTrail Lake | Not planned | — | ⬜ |
-| 4.4.4 | Analyze logs with AWS services | Stretch | Same as 3.3.8 | ⬜ |
+| 4.4.4 | Analyze logs with AWS services | Planned | T2: same evidence as 3.3.8 (Logs Insights) | ⬜ |
 | 4.4.5 | Large-volume logging integrations | Not planned | — | ⬜ |
 
 ### Task 4.5: Privacy and governance

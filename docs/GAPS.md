@@ -45,9 +45,9 @@ official skill. It was built from exam guide version 1.1 (published
 2025-12-12), fetched 2026-09-25; re-checks are logged in
 [`exam-guide-delta.md`](exam-guide-delta.md).
 
-Summary as of 2026-09-26: 120 skills, of which 60 are planned, 34 stretch
-and 26 not planned (ADR-0004 moved 1.4.6 and 1.4.8 from stretch to planned). The thinnest domain is 4 (Security and Governance),
-with 9 of 29 planned. The 26 "not planned" skills are candidates for
+Summary as of 2026-09-26: 120 skills, of which 86 are planned, 8 stretch
+and 26 not planned (ADR-0004 moved 1.4.6 and 1.4.8 to planned; 26 more stretch skills were promoted the same day as low-cost tier add-ons). The thinnest domain is 4 (Security and Governance),
+with 15 of 29 planned. The 26 "not planned" skills are candidates for
 Known Limitations, but they are not accepted yet. Promote them to §3 only
 when the owner confirms each one (for example multi-account encryption,
 AWS Organizations region controls, vector stores, SageMaker Catalog, and

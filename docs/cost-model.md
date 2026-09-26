@@ -52,8 +52,11 @@ expiry; its cost is expected to be negligible (not yet measured).
 
 **Not yet verified:** Glue minimum DPUs per Spark job and the Python-shell
 DPU size; provisioned Redshift dc2/ra3 hourly prices (the table did not
-render); Kinesis per-shard write limits; whether Firehose format conversion
-uses the same 5 KB rounding as ingest.
+render); whether Firehose format conversion uses the same 5 KB rounding
+as ingest; the costs of the T2 add-ons promoted on 2026-09-26 (Glue Data
+Quality, Lake Formation, CloudTrail, CloudWatch Logs Insights, SSM
+Parameter Store). Kinesis per-shard limits were verified on 2026-09-26
+(GAPS G-02).
 
 ---
 
