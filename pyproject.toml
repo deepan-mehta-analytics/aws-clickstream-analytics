@@ -16,7 +16,12 @@ dependencies = [                                        # runtime libraries, pin
 ]
 
 [project.optional-dependencies]                         # extra tools for development
-dev = ["pytest==9.0.2", "ruff==0.15.12"]                # test runner and linter
+dev = [                                                 # development-only tools, pinned
+    "pytest==9.0.2",                                    # test runner
+    "ruff==0.15.12",                                    # Python linter
+    "pyyaml==6.0.3",                                    # parses CloudFormation templates in the infra tests
+    "cfn-lint==1.57.0",                                 # validates CloudFormation templates against the AWS spec
+]
 
 # ── Package discovery ─────────────────────────────────────────
 [tool.setuptools.packages.find]                         # find packages automatically
