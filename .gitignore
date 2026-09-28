@@ -7,6 +7,8 @@
 /reference_*.md
 # Private specs, plans and exam study notes (same pattern as databricks-fraud-detection)
 /docs/superpowers/
+# Local subagent task ledger, briefs and review packages (was only in the machine-wide ignore)
+/.superpowers/
 
 # ── Secrets and credentials ───────────────────────────────────
 .env
