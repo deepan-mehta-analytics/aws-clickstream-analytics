@@ -26,8 +26,8 @@ def sorted_pandas(frame, keys):                                         # Spark 
             table[column] = series.astype("int64")                      # one integer type
         elif pd.api.types.is_float_dtype(series):                       # doubles
             table[column] = series.astype("float64").round(4)           # compare to 4 decimals
-        elif series.dtype == object and series.notna().any() and hasattr(series.dropna().iloc[0], "isoformat"):  # datetime.date objects
-            table[column] = series.map(lambda value: value.isoformat() if hasattr(value, "isoformat") else None)  # compare dates as ISO text
+        elif series.dtype == object and series.notna().any() and hasattr(series.dropna().iloc[0], "isoformat"):  # datetime.date objects (Spark DateType round trip)
+            table[column] = pd.to_datetime(series, utc=True).astype("datetime64[us, UTC]")  # same canonical form as a native datetime64 column (e.g. DuckDB's DATE round trip)
     return table.sort_values(keys).reset_index(drop=True)               # stable order
 
 
