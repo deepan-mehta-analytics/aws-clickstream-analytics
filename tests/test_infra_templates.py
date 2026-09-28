@@ -10,9 +10,12 @@ from infra_rules import (                                               # rules 
     REPO_ROOT,                                                          # repository root
     account_id_problems,                                                # no 12-digit numbers
     broad_managed_policy_problems,                                      # no admin/full-access managed policies
+    catalog_name_problems,                                              # Athena-compatible Glue catalog names
     public_principal_problems,                                          # no public principals or open function URLs
+    glue_job_problems,                                                  # bounded, self-contained Glue jobs
     iam_user_problems,                                                  # no IAM users or keys
     insecure_transport_problems,                                        # TLS-only bucket policies
+    lambda_concurrency_problems,                                        # every function has a concurrency cap
     load_template,                                                      # parse a real template
     named_iam_problems,                                                  # IAM names left to CloudFormation
     public_bucket_problems,                                             # Block Public Access on
@@ -239,3 +242,22 @@ def test_real_template_passes_every_rule(path):                         # every 
 
 def test_tracked_files_have_no_account_ids():                           # every committed text file in the repo
     assert account_id_problems(REPO_ROOT) == []                         # no 12-digit numbers anywhere
+
+
+# ── New rules (T1a) ───────────────────────────────────────────
+def test_glue_job_rule_flags_missing_timeout_and_tempdir():             # runaway cost and public temp bucket
+    template = {"Resources": {"Job": {"Type": "AWS::Glue::Job", "Properties": {"GlueVersion": "6.0", "Timeout": 120, "DefaultArguments": {}}}}}  # long timeout, no TempDir
+    assert glue_job_problems(template) == ["Job: Timeout must be set and at most 30 minutes", "Job: DefaultArguments has no --TempDir (Glue may create its own temp bucket)"]  # both flagged
+
+
+def test_lambda_concurrency_rule_flags_unbounded_function():            # 1.4.2 and cost fuse
+    template = {"Resources": {"Worker": {"Type": "AWS::Serverless::Function", "Properties": {"Runtime": "python3.13"}}}}  # no reserved concurrency
+    assert lambda_concurrency_problems(template) == ["Worker: ReservedConcurrentExecutions not set"]  # flagged
+
+
+def test_catalog_name_rule_flags_missing_and_hyphenated_names():        # Athena-compatible names
+    template = {"Resources": {                                          # two bad catalog objects
+        "Db": {"Type": "AWS::Glue::Database", "Properties": {"DatabaseInput": {}}},  # no name: Glue generates an Athena-incompatible one
+        "Tbl": {"Type": "AWS::Glue::Table", "Properties": {"TableInput": {"Name": "gold-visits"}}},  # hyphen
+    }}
+    assert catalog_name_problems(template) == ["Db: DatabaseInput.Name must be set, lowercase letters, digits or _", "Tbl: TableInput.Name must be set, lowercase letters, digits or _"]  # both flagged

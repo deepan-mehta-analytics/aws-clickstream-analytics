@@ -1,0 +1,708 @@
+# ── Tier T1a stack: serverless batch lake (spec 2026-09-26, ADR-0005 proposed) ──
+AWSTemplateFormatVersion: "2010-09-09"                     # CloudFormation template format version
+Transform: AWS::Serverless-2016-10-31                      # SAM transform (ADR-0004)
+Description: >-                                            # shown in the CloudFormation console
+  Tier T1a: Lambda lands raw UCI rows in Bronze; a Glue 6.0 Spark job builds Silver and Gold;
+  Athena queries them through the Glue Data Catalog. Torn down after every window.
+
+Parameters:                                                # values supplied at deploy time (samconfig.toml)
+  ArtifactsBucketName:                                     # foundation stack output
+    Type: String                                           # bucket name
+    Description: ArtifactsBucketName output of the clickstream-foundation stack  # where the Glue code is uploaded
+  GlueScriptKey:                                            # Glue script object key
+    Type: String                                           # S3 key
+    Default: t1-lake/glue/build_silver_gold.py             # uploaded by scripts/t1a-upload-glue-code.ps1
+  GlueLibrariesKey:                                         # library zip object key
+    Type: String                                           # S3 key
+    Default: t1-lake/glue-libs/clickstream_libs.zip        # uploaded by the same script
+  GlueVersion:                                              # Glue runtime
+    Type: String                                           # version text
+    Default: "6.0"                                         # Spark 4.1.1, Python 3.13
+    AllowedValues: ["6.0", "5.1"]                          # 5.1 (Spark 3.5.6) only if 6.0 is not offered in ap-south-1
+
+Resources:                                                 # everything this stack creates
+  # ── Buckets (bronze versioned; results expire) ─────────────
+  BronzeBucket:                                            # raw UCI rows, one file per source month
+    Type: AWS::S3::Bucket                                  # S3 bucket
+    DeletionPolicy: Delete                                 # the teardown script empties it first
+    UpdateReplacePolicy: Delete                            # replacement removes the old bucket too
+    Properties:                                            # settings; no BucketName, so CloudFormation generates one
+      VersioningConfiguration:                             # keep history of raw files
+        Status: Enabled                                    # only this bucket (2.3.4)
+      BucketEncryption:                                    # encryption at rest
+        ServerSideEncryptionConfiguration:                 # one default rule
+          - ServerSideEncryptionByDefault:                 # applied to every object
+              SSEAlgorithm: AES256                         # SSE-S3
+      PublicAccessBlockConfiguration:                      # never public
+        BlockPublicAcls: true                              # reject public ACLs
+        BlockPublicPolicy: true                            # reject public policies
+        IgnorePublicAcls: true                             # ignore public ACLs
+        RestrictPublicBuckets: true                        # restrict if a public policy slips through
+      OwnershipControls:                                   # object ownership
+        Rules:                                             # one rule
+          - ObjectOwnership: BucketOwnerEnforced           # ACLs disabled
+      LifecycleConfiguration:                              # automatic clean-up
+        Rules:                                             # two rules
+          - Id: ExpireOldVersions                          # overwritten raw files
+            Status: Enabled                                # active
+            NoncurrentVersionExpiration:                   # old versions only
+              NoncurrentDays: 7                            # after 7 days
+          - Id: AbortUnfinishedUploads                     # stray multipart uploads
+            Status: Enabled                                # active
+            AbortIncompleteMultipartUpload:                # clean-up
+              DaysAfterInitiation: 1                       # after one day
+  SilverBucket:                                            # Silver clicks, clicks_rejected, and quality reports
+    Type: AWS::S3::Bucket                                  # S3 bucket
+    DeletionPolicy: Delete                                 # the teardown script empties it first
+    UpdateReplacePolicy: Delete                            # replacement removes the old bucket too
+    Properties:                                            # settings; no BucketName, so CloudFormation generates one
+      BucketEncryption:                                    # encryption at rest
+        ServerSideEncryptionConfiguration:                 # one default rule
+          - ServerSideEncryptionByDefault:                 # applied to every object
+              SSEAlgorithm: AES256                         # SSE-S3
+      PublicAccessBlockConfiguration:                      # never public
+        BlockPublicAcls: true                              # reject public ACLs
+        BlockPublicPolicy: true                            # reject public policies
+        IgnorePublicAcls: true                             # ignore public ACLs
+        RestrictPublicBuckets: true                        # restrict if a public policy slips through
+      OwnershipControls:                                   # object ownership
+        Rules:                                             # one rule
+          - ObjectOwnership: BucketOwnerEnforced           # ACLs disabled
+      LifecycleConfiguration:                              # automatic clean-up
+        Rules:                                             # one rule (Silver is rebuilt in place, not versioned)
+          - Id: AbortUnfinishedUploads                     # stray multipart uploads
+            Status: Enabled                                # active
+            AbortIncompleteMultipartUpload:                # clean-up
+              DaysAfterInitiation: 1                       # after one day
+  GoldBucket:                                              # Gold star-schema and summary tables
+    Type: AWS::S3::Bucket                                  # S3 bucket
+    DeletionPolicy: Delete                                 # the teardown script empties it first
+    UpdateReplacePolicy: Delete                            # replacement removes the old bucket too
+    Properties:                                            # settings; no BucketName, so CloudFormation generates one
+      BucketEncryption:                                    # encryption at rest
+        ServerSideEncryptionConfiguration:                 # one default rule
+          - ServerSideEncryptionByDefault:                 # applied to every object
+              SSEAlgorithm: AES256                         # SSE-S3
+      PublicAccessBlockConfiguration:                      # never public
+        BlockPublicAcls: true                              # reject public ACLs
+        BlockPublicPolicy: true                            # reject public policies
+        IgnorePublicAcls: true                             # ignore public ACLs
+        RestrictPublicBuckets: true                        # restrict if a public policy slips through
+      OwnershipControls:                                   # object ownership
+        Rules:                                             # one rule
+          - ObjectOwnership: BucketOwnerEnforced           # ACLs disabled
+      LifecycleConfiguration:                              # automatic clean-up
+        Rules:                                             # one rule (Gold is rebuilt in place, not versioned)
+          - Id: AbortUnfinishedUploads                     # stray multipart uploads
+            Status: Enabled                                # active
+            AbortIncompleteMultipartUpload:                # clean-up
+              DaysAfterInitiation: 1                       # after one day
+  AthenaResultsBucket:                                     # Athena query result files
+    Type: AWS::S3::Bucket                                  # S3 bucket
+    DeletionPolicy: Delete                                 # the teardown script empties it first
+    UpdateReplacePolicy: Delete                            # replacement removes the old bucket too
+    Properties:                                            # settings; no BucketName, so CloudFormation generates one
+      BucketEncryption:                                    # encryption at rest
+        ServerSideEncryptionConfiguration:                 # one default rule
+          - ServerSideEncryptionByDefault:                 # applied to every object
+              SSEAlgorithm: AES256                         # SSE-S3
+      PublicAccessBlockConfiguration:                      # never public
+        BlockPublicAcls: true                              # reject public ACLs
+        BlockPublicPolicy: true                            # reject public policies
+        IgnorePublicAcls: true                             # ignore public ACLs
+        RestrictPublicBuckets: true                        # restrict if a public policy slips through
+      OwnershipControls:                                   # object ownership
+        Rules:                                             # one rule
+          - ObjectOwnership: BucketOwnerEnforced           # ACLs disabled
+      LifecycleConfiguration:                              # automatic clean-up
+        Rules:                                             # two rules
+          - Id: AbortUnfinishedUploads                     # stray multipart uploads
+            Status: Enabled                                # active
+            AbortIncompleteMultipartUpload:                # clean-up
+              DaysAfterInitiation: 1                       # after one day
+          - Id: ExpireQueryResults                         # no pile-up of query result files
+            Status: Enabled                                # active
+            ExpirationInDays: 1                             # gone after one day
+  BronzeBucketPolicy:                                       # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
+    Properties:                                             # policy settings
+      Bucket: !Ref BronzeBucket                             # attached to the Bronze bucket
+      PolicyDocument:                                       # IAM policy document
+        Version: "2012-10-17"                               # current policy language version
+        Statement:                                          # one statement
+          - Sid: DenyRequestsWithoutTls                     # statement label
+            Effect: Deny                                    # explicit deny beats any allow
+            Principal: "*"                                  # applies to every caller
+            Action: "s3:*"                                  # every S3 action
+            Resource:                                       # the bucket and every object in it
+              - !GetAtt BronzeBucket.Arn                     # the bucket itself
+              - !Sub "${BronzeBucket.Arn}/*"                # every object in the bucket
+            Condition:                                      # only when...
+              Bool:                                         # boolean condition
+                aws:SecureTransport: "false"                # ...the request did not use TLS
+  SilverBucketPolicy:                                        # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
+    Properties:                                             # policy settings
+      Bucket: !Ref SilverBucket                              # attached to the Silver bucket
+      PolicyDocument:                                       # IAM policy document
+        Version: "2012-10-17"                               # current policy language version
+        Statement:                                          # one statement
+          - Sid: DenyRequestsWithoutTls                     # statement label
+            Effect: Deny                                    # explicit deny beats any allow
+            Principal: "*"                                  # applies to every caller
+            Action: "s3:*"                                  # every S3 action
+            Resource:                                       # the bucket and every object in it
+              - !GetAtt SilverBucket.Arn                     # the bucket itself
+              - !Sub "${SilverBucket.Arn}/*"                # every object in the bucket
+            Condition:                                      # only when...
+              Bool:                                         # boolean condition
+                aws:SecureTransport: "false"                # ...the request did not use TLS
+  GoldBucketPolicy:                                          # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
+    Properties:                                             # policy settings
+      Bucket: !Ref GoldBucket                                # attached to the Gold bucket
+      PolicyDocument:                                       # IAM policy document
+        Version: "2012-10-17"                               # current policy language version
+        Statement:                                          # one statement
+          - Sid: DenyRequestsWithoutTls                     # statement label
+            Effect: Deny                                    # explicit deny beats any allow
+            Principal: "*"                                  # applies to every caller
+            Action: "s3:*"                                  # every S3 action
+            Resource:                                       # the bucket and every object in it
+              - !GetAtt GoldBucket.Arn                       # the bucket itself
+              - !Sub "${GoldBucket.Arn}/*"                  # every object in the bucket
+            Condition:                                      # only when...
+              Bool:                                         # boolean condition
+                aws:SecureTransport: "false"                # ...the request did not use TLS
+  AthenaResultsBucketPolicy:                                 # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
+    Properties:                                             # policy settings
+      Bucket: !Ref AthenaResultsBucket                       # attached to the Athena results bucket
+      PolicyDocument:                                       # IAM policy document
+        Version: "2012-10-17"                               # current policy language version
+        Statement:                                          # one statement
+          - Sid: DenyRequestsWithoutTls                     # statement label
+            Effect: Deny                                    # explicit deny beats any allow
+            Principal: "*"                                  # applies to every caller
+            Action: "s3:*"                                  # every S3 action
+            Resource:                                       # the bucket and every object in it
+              - !GetAtt AthenaResultsBucket.Arn               # the bucket itself
+              - !Sub "${AthenaResultsBucket.Arn}/*"          # every object in the bucket
+            Condition:                                      # only when...
+              Bool:                                         # boolean condition
+                aws:SecureTransport: "false"                # ...the request did not use TLS
+
+  # ── Ingest Lambda ───────────────────────────────────────────
+  IngestFunction:                                          # lands raw rows by month
+    Type: AWS::Serverless::Function                        # SAM function (creates its role)
+    Properties:                                            # function settings
+      CodeUri: ../../lambdas/ingest_source/                # relative to this template; sam build packages it
+      Handler: handler.handler                             # file.function
+      Runtime: python3.13                                  # same Python as Glue 6.0
+      Architectures: [arm64]                               # Graviton: cheaper per GB-second
+      MemorySize: 512                                      # enough for a 6.7 MB CSV in memory
+      Timeout: 60                                          # seconds
+      ReservedConcurrentExecutions: 1                      # one run at a time (1.4.2)
+      LoggingConfig:                                       # log settings
+        LogFormat: JSON                                    # structured logs (3.3.7)
+      Environment:                                         # settings for the code
+        Variables:                                         # environment variables
+          BRONZE_BUCKET: !Ref BronzeBucket                 # generated bucket name
+      Policies:                                            # least-privilege statements (SAM adds basic logging)
+        - Statement:                                       # inline policy
+            - Effect: Allow                                # grant
+              Action: [s3:GetObject, s3:PutObject]         # head/read and write objects
+              Resource: !Sub "${BronzeBucket.Arn}/source_month=*"  # only the month folders
+            - Effect: Allow                                # grant
+              Action: s3:ListBucket                        # lets HeadObject answer 404 instead of 403
+              Resource: !GetAtt BronzeBucket.Arn            # the bucket itself
+  IngestLogGroup:                                          # the function's log group with a retention period
+    Type: AWS::Logs::LogGroup                              # CloudWatch Logs
+    DeletionPolicy: Delete                                 # removed with the stack
+    Properties:                                            # settings
+      LogGroupName: !Sub "/aws/lambda/${IngestFunction}"   # the name Lambda writes to
+      RetentionInDays: 7                                   # no slow storage leak
+
+  # ── Glue job and its role ───────────────────────────────────
+  GlueJobRole:                                             # what the Spark job may touch
+    Type: AWS::IAM::Role                                   # IAM role (no RoleName: CloudFormation names it)
+    Properties:                                            # role settings
+      AssumeRolePolicyDocument:                            # who can use it
+        Version: "2012-10-17"                              # policy language version
+        Statement:                                         # one statement
+          - Effect: Allow                                  # grant
+            Principal: { Service: glue.amazonaws.com }     # the Glue service
+            Action: sts:AssumeRole                         # take on the role
+      Policies:                                            # inline, scoped policies
+        - PolicyName: lake-access                          # one policy
+          PolicyDocument:                                  # its statements
+            Version: "2012-10-17"                          # policy language version
+            Statement:                                     # grants
+              - Effect: Allow                              # read raw rows
+                Action: s3:GetObject                       # read objects
+                Resource: !Sub "${BronzeBucket.Arn}/*"     # Bronze objects
+              - Effect: Allow                              # list the three data buckets
+                Action: s3:ListBucket                      # list keys
+                Resource: [!GetAtt BronzeBucket.Arn, !GetAtt SilverBucket.Arn, !GetAtt GoldBucket.Arn]  # buckets only
+              - Effect: Allow                              # write Silver and Gold, temp files and reports
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject, s3:AbortMultipartUpload]  # overwrite needs delete; S3A aborts failed multipart uploads
+                Resource: [!Sub "${SilverBucket.Arn}/*", !Sub "${GoldBucket.Arn}/*"]  # objects only
+              - Effect: Allow                              # read the uploaded code
+                Action: s3:GetObject                       # read objects
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/t1-lake/*"  # script and zip only
+              - Effect: Allow                              # job logs
+                Action: [logs:CreateLogStream, logs:PutLogEvents]  # write log lines
+                Resource: !Sub "${GlueLogGroup.Arn}:*"     # our log group's streams
+              - Effect: Allow                              # default Glue output/error logs
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]  # write log lines
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws-glue/*"  # Glue's own groups
+              - Effect: Allow                              # job metrics (3.3.2)
+                Action: cloudwatch:PutMetricData           # publish metrics
+                Resource: "*"                              # PutMetricData has no resource type
+                Condition:                                 # but only in the Glue namespace
+                  StringEquals:                            # exact match
+                    cloudwatch:namespace: Glue             # Glue metrics
+  GlueLogGroup:                                            # continuous driver logs
+    Type: AWS::Logs::LogGroup                              # CloudWatch Logs
+    DeletionPolicy: Delete                                 # removed with the stack
+    Properties:                                            # settings
+      LogGroupName: !Sub "/aws-glue/${AWS::StackName}"     # stack-scoped name
+      RetentionInDays: 7                                   # no slow storage leak
+  BuildSilverGoldJob:                                      # the Spark job
+    Type: AWS::Glue::Job                                   # Glue ETL job
+    Properties:                                            # job settings
+      Name: !Sub "${AWS::StackName}-build-silver-gold"     # stack-scoped name
+      Role: !GetAtt GlueJobRole.Arn                        # the role above
+      GlueVersion: !Ref GlueVersion                        # 6.0 by default
+      WorkerType: G.1X                                     # 1 DPU per worker (4 vCPU, 16 GB)
+      NumberOfWorkers: 2                                   # smallest sensible cluster
+      ExecutionClass: FLEX                                 # cheaper, may start later
+      Timeout: 15                                          # minutes; caps a runaway bill
+      MaxRetries: 0                                        # a failure is looked at, not retried blindly
+      ExecutionProperty:                                   # concurrency
+        MaxConcurrentRuns: 1                               # one run at a time (bookmark safety)
+      Command:                                             # what to run
+        Name: glueetl                                      # Spark ETL job
+        PythonVersion: "3"                                 # Python 3
+        ScriptLocation: !Sub "s3://${ArtifactsBucketName}/${GlueScriptKey}"  # uploaded script
+      DefaultArguments:                                    # job arguments
+        "--job-bookmark-option": job-bookmark-enable       # remember processed files (1.1.3)
+        "--TempDir": !Sub "s3://${SilverBucket}/_tmp/"     # our own temp path (no auto-created bucket)
+        "--extra-py-files": !Sub "s3://${ArtifactsBucketName}/${GlueLibrariesKey}"  # clickstream + clickstream_spark
+        "--bronze_path": !Sub "s3://${BronzeBucket}/"      # read every source_month= folder
+        "--silver_path": !Sub "s3://${SilverBucket}"       # Silver root (no trailing slash)
+        "--gold_path": !Sub "s3://${GoldBucket}"           # Gold root
+        "--reports_bucket": !Ref SilverBucket              # quality reports under _reports/
+        "--enable-metrics": "true"                         # job metrics
+        "--enable-continuous-cloudwatch-log": "true"       # stream driver logs while running
+        "--continuous-log-logGroup": !Ref GlueLogGroup     # into our 7-day group
+
+  # ── Glue Data Catalog ──────────────────────────────────────
+  ClickstreamDatabase:                                     # Athena database
+    Type: AWS::Glue::Database                              # catalog database
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account's catalog
+      DatabaseInput:                                       # definition
+        Name: clickstream_t1                               # explicit, Athena-safe (a generated name would not work in Athena)
+        Description: Tier T1a clickstream lake (Bronze raw, Silver, Gold)  # shown in the console
+  SilverClicksTable:                                       # Silver clicks, partitioned by month
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: silver_clicks                                # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format
+          projection.enabled: "true"                       # partition projection (no crawler, no MSCK REPAIR)
+          projection.click_month.type: date                # month values are dates
+          projection.click_month.format: yyyy-MM           # e.g. 2008-04
+          projection.click_month.range: 2008-04,2008-08    # the dataset's months
+          projection.click_month.interval: "1"             # every month
+          projection.click_month.interval.unit: MONTHS     # month steps
+          storage.location.template: !Sub "s3://${SilverBucket}/clicks/click_month=${!click_month}"  # ${!...} is a literal ${...} for Athena
+        PartitionKeys:                                     # partition columns (last, as Spark writes them)
+          - { Name: click_month, Type: string }            # 2008-04 ... 2008-08
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${SilverBucket}/clicks/"    # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, SILVER_COLUMNS order (tested)
+            - { Name: click_id, Type: string }             # uci553-<visit>-<click>
+            - { Name: visit_id, Type: bigint }             # visit
+            - { Name: click_number_in_visit, Type: bigint }  # position
+            - { Name: click_date, Type: date }             # real date
+            - { Name: click_time_synthetic, Type: timestamp }  # UTC synthetic time
+            - { Name: click_hour_shop_time_synthetic, Type: bigint }  # local hour
+            - { Name: product_code, Type: string }         # product
+            - { Name: category, Type: string }             # decoded category
+            - { Name: colour, Type: string }               # decoded colour
+            - { Name: price_usd, Type: bigint }            # price
+            - { Name: priced_above_category_average, Type: boolean }  # flag
+            - { Name: page_number_in_shop, Type: bigint }  # listing page
+            - { Name: photo_position_on_page, Type: string }  # placement
+            - { Name: photo_angle, Type: string }          # angle
+            - { Name: country_code, Type: bigint }         # country
+            - { Name: device_type_synthetic, Type: string }  # synthetic device
+            - { Name: received_time, Type: timestamp }     # arrival
+            - { Name: seconds_late, Type: bigint }         # lateness
+  BronzeSourceClicksTable:                                 # raw CSV, for checking the landed files in Athena
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: bronze_source_clicks                         # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: csv                              # file format
+          skip.header.line.count: "1"                      # first line is the header
+          projection.enabled: "true"                       # partition projection
+          projection.source_month.type: date               # month values
+          projection.source_month.format: yyyy-MM         # e.g. 2008-04
+          projection.source_month.range: 2008-04,2008-08   # dataset months
+          projection.source_month.interval: "1"            # every month
+          projection.source_month.interval.unit: MONTHS    # month steps
+          storage.location.template: !Sub "s3://${BronzeBucket}/source_month=${!source_month}"  # one folder per month
+        PartitionKeys:                                     # partition column
+          - { Name: source_month, Type: string }           # from the key
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${BronzeBucket}/"           # bucket root
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat  # text lines
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat  # text writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe  # delimited text
+            Parameters:                                    # SerDe settings
+              field.delim: ";"                             # semicolons
+          Columns:                                         # plain names in source order (positional)
+            - { Name: year, Type: bigint }                 # year
+            - { Name: month, Type: bigint }                # month
+            - { Name: day, Type: bigint }                  # day
+            - { Name: click_number_in_visit, Type: bigint }  # source "order"
+            - { Name: country_code, Type: bigint }         # source "country"
+            - { Name: visit_id, Type: bigint }             # source "session ID"
+            - { Name: category_code, Type: bigint }        # page 1
+            - { Name: product_code, Type: string }         # page 2
+            - { Name: colour_code, Type: bigint }          # colour
+            - { Name: photo_position_code, Type: bigint }  # location
+            - { Name: photo_angle_code, Type: bigint }     # model photography
+            - { Name: price_usd, Type: bigint }            # price
+            - { Name: price_above_category_average_code, Type: bigint }  # price 2
+            - { Name: page_number_in_shop, Type: bigint }  # page (LF endings keep this clean)
+  SilverClicksRejectedTable:                               # Silver rejects, partitioned by the source Bronze month
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: silver_clicks_rejected                       # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format
+          projection.enabled: "true"                       # partition projection
+          projection.source_month.type: date               # month values
+          projection.source_month.format: yyyy-MM         # e.g. 2008-04
+          projection.source_month.range: 2008-04,2008-08   # dataset months
+          projection.source_month.interval: "1"            # every month
+          projection.source_month.interval.unit: MONTHS    # month steps
+          storage.location.template: !Sub "s3://${SilverBucket}/clicks_rejected/source_month=${!source_month}"  # one folder per source month
+        PartitionKeys:                                     # partition column (last, as Spark writes it)
+          - { Name: source_month, Type: string }           # the Bronze file month
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${SilverBucket}/clicks_rejected/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, REJECTED_COLUMNS order minus source_month (tested against the Spark constant)
+            - { Name: year, Type: bigint }                 # year
+            - { Name: month, Type: bigint }                # month
+            - { Name: day, Type: bigint }                  # day
+            - { Name: click_number_in_visit, Type: bigint }  # source "order"
+            - { Name: country_code, Type: bigint }         # source "country"
+            - { Name: visit_id, Type: bigint }             # source "session ID"
+            - { Name: category_code, Type: bigint }        # page 1
+            - { Name: product_code, Type: string }         # page 2
+            - { Name: colour_code, Type: bigint }          # colour
+            - { Name: photo_position_code, Type: bigint }  # location
+            - { Name: photo_angle_code, Type: bigint }     # model photography
+            - { Name: price_usd, Type: bigint }            # price
+            - { Name: price_above_category_average_code, Type: bigint }  # price 2
+            - { Name: page_number_in_shop, Type: bigint }  # page
+            - { Name: click_id, Type: string }             # uci553-<visit>-<click>
+            - { Name: click_time_synthetic, Type: timestamp }  # UTC synthetic time
+            - { Name: device_type_synthetic, Type: string }  # synthetic device
+            - { Name: received_time, Type: timestamp }     # arrival
+            - { Name: data_source, Type: string }          # "uci553"
+            - { Name: rejection_reason, Type: string }     # why the click failed
+            - { Name: rejected_time, Type: timestamp }     # when this run rejected it
+  GoldClicksTable:                                         # Gold clicks (event table, click grain), partitioned by month
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_clicks                                  # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format
+          projection.enabled: "true"                       # partition projection
+          projection.click_month.type: date                # month values
+          projection.click_month.format: yyyy-MM           # e.g. 2008-04
+          projection.click_month.range: 2008-04,2008-08    # dataset months
+          projection.click_month.interval: "1"             # every month
+          projection.click_month.interval.unit: MONTHS     # month steps
+          storage.location.template: !Sub "s3://${GoldBucket}/clicks/click_month=${!click_month}"  # one folder per month
+        PartitionKeys:                                     # partition column (last, as Spark writes it)
+          - { Name: click_month, Type: string }            # 2008-04 ... 2008-08
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/clicks/"      # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, GOLD_CLICK_COLUMNS order minus click_month (tested)
+            - { Name: click_id, Type: string }             # uci553-<visit>-<click>
+            - { Name: visit_id, Type: bigint }             # visit
+            - { Name: click_number_in_visit, Type: bigint }  # position
+            - { Name: click_date, Type: date }             # real date
+            - { Name: click_time_synthetic, Type: timestamp }  # UTC synthetic time
+            - { Name: product_code, Type: string }         # product key
+            - { Name: country_code, Type: bigint }         # country key
+            - { Name: device_type_synthetic, Type: string }  # synthetic device key
+            - { Name: price_usd, Type: bigint }            # price measure
+  GoldVisitsTable:                                         # Gold visits (event table, visit grain), partitioned by month
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_visits                                  # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format
+          projection.enabled: "true"                       # partition projection
+          projection.visit_month.type: date                # month values
+          projection.visit_month.format: yyyy-MM           # e.g. 2008-04
+          projection.visit_month.range: 2008-04,2008-08    # dataset months
+          projection.visit_month.interval: "1"             # every month
+          projection.visit_month.interval.unit: MONTHS     # month steps
+          storage.location.template: !Sub "s3://${GoldBucket}/visits/visit_month=${!visit_month}"  # one folder per month
+        PartitionKeys:                                     # partition column (last, as Spark writes it)
+          - { Name: visit_month, Type: string }            # 2008-04 ... 2008-08
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/visits/"      # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, VISIT_COLUMNS order minus visit_month (tested)
+            - { Name: visit_id, Type: bigint }             # visit
+            - { Name: visit_date, Type: date }             # real date (visits never cross midnight)
+            - { Name: country_code, Type: bigint }         # country
+            - { Name: device_type_synthetic, Type: string }  # synthetic device
+            - { Name: visit_start_time_synthetic, Type: timestamp }  # first click time
+            - { Name: visit_end_time_synthetic, Type: timestamp }  # last click time
+            - { Name: visit_length_seconds_synthetic, Type: bigint }  # duration
+            - { Name: clicks_in_visit, Type: bigint }      # number of clicks
+            - { Name: products_viewed, Type: bigint }      # distinct products
+            - { Name: categories_viewed, Type: bigint }    # distinct categories
+            - { Name: deepest_page_reached, Type: bigint }  # browse-depth funnel stage
+            - { Name: bounced, Type: boolean }             # one click = bounce
+            - { Name: first_product_viewed, Type: string }  # entry product
+            - { Name: last_product_viewed, Type: string }  # exit product
+  GoldProductsTable:                                       # Gold products (whole table, rebuilt every run)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_products                                # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/products/"    # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, PRODUCT_COLUMNS order (tested)
+            - { Name: product_code, Type: string }         # product
+            - { Name: category, Type: string }             # most frequent decoded category
+            - { Name: colour, Type: string }                # decoded colour
+            - { Name: price_usd, Type: bigint }             # price
+            - { Name: priced_above_category_average, Type: boolean }  # flag
+            - { Name: page_number_in_shop, Type: bigint }  # listing page
+            - { Name: photo_position_on_page, Type: string }  # placement
+            - { Name: photo_angle, Type: string }           # angle
+  GoldCountriesTable:                                      # Gold countries (static reference table)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_countries                               # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/countries/"   # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: country_code, Type: bigint }         # 1-47
+            - { Name: country_name, Type: string }         # decoded name
+            - { Name: kind, Type: string }                 # country / grouped / other
+  GoldCalendarDaysTable:                                   # Gold calendar_days (whole table, rebuilt every run)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_calendar_days                           # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/calendar_days/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns, CALENDAR_COLUMNS order (tested)
+            - { Name: calendar_date, Type: date }           # one row per date with clicks
+            - { Name: day_of_week, Type: string }           # e.g. Saturday
+            - { Name: week_number, Type: bigint }           # ISO week
+            - { Name: month_name, Type: string }            # e.g. April
+  GoldDevicesTable:                                        # Gold devices (static reference table)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_devices                                 # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/devices/"     # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: device_type, Type: string }          # desktop / mobile / tablet
+  GoldSummaryDailyVisitsTable:                             # Gold summaries/daily_visits (dashboard summary)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_summary_daily_visits                    # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/summaries/daily_visits/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: visit_date, Type: date }             # one row per day
+            - { Name: visits, Type: bigint }               # visit count
+            - { Name: clicks, Type: bigint }                # click count
+            - { Name: bounce_rate, Type: double }           # bounced visits / visits
+  GoldSummaryVisitDepthFunnelTable:                        # Gold summaries/visit_depth_funnel (dashboard summary)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_summary_visit_depth_funnel               # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/summaries/visit_depth_funnel/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: shop_page, Type: bigint }             # listing page 1-5
+            - { Name: visits_reaching_page, Type: bigint }  # how many visits reached that page
+  GoldSummaryBounceRateByProductTable:                     # Gold summaries/bounce_rate_by_product (dashboard summary)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_summary_bounce_rate_by_product          # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/summaries/bounce_rate_by_product/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: product_code, Type: string }         # entry product
+            - { Name: visits_started, Type: bigint }       # visits that entered on this product
+            - { Name: visits_bounced, Type: bigint }       # of those, single-click visits
+            - { Name: bounce_rate, Type: double }           # visits_bounced / visits_started
+  GoldSummaryVisitsByCountryAndDeviceTable:                # Gold summaries/visits_by_country_and_device (dashboard summary)
+    Type: AWS::Glue::Table                                 # catalog table
+    Properties:                                            # settings
+      CatalogId: !Ref AWS::AccountId                       # this account
+      DatabaseName: !Ref ClickstreamDatabase               # clickstream_t1
+      TableInput:                                          # definition
+        Name: gold_summary_visits_by_country_and_device    # Athena name
+        TableType: EXTERNAL_TABLE                          # data lives in S3
+        Parameters:                                        # table properties
+          classification: parquet                          # file format (no projection: unpartitioned)
+        StorageDescriptor:                                 # where and how
+          Location: !Sub "s3://${GoldBucket}/summaries/visits_by_country_and_device/"  # table root
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat  # Parquet reader
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat  # Parquet writer
+          SerdeInfo:                                       # serializer
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe  # Parquet SerDe
+          Columns:                                         # data columns
+            - { Name: country_code, Type: bigint }         # country
+            - { Name: country_name, Type: string }          # decoded name
+            - { Name: device_type_synthetic, Type: string }  # synthetic device
+            - { Name: visits, Type: bigint }                # visit count
+
+  # ── Athena workgroup ────────────────────────────────────────
+  AthenaWorkGroup:                                         # where the owner's queries run
+    Type: AWS::Athena::WorkGroup                           # Athena workgroup
+    Properties:                                            # settings
+      Name: !Sub "${AWS::StackName}-workgroup"             # stack-scoped name
+      State: ENABLED                                       # usable
+      RecursiveDeleteOption: true                          # stack delete also removes saved queries/history
+      WorkGroupConfiguration:                              # enforced settings
+        EnforceWorkGroupConfiguration: true                # clients cannot override
+        BytesScannedCutoffPerQuery: 1073741824             # 1 GB per query, a cost fuse
+        PublishCloudWatchMetricsEnabled: false             # no metric charges
+        ResultConfiguration:                               # query results
+          OutputLocation: !Sub "s3://${AthenaResultsBucket}/results/"  # expire after 1 day
+          EncryptionConfiguration:                         # encryption
+            EncryptionOption: SSE_S3                       # S3-managed keys
+
+Outputs:                                                   # read by scripts/t1a-*.ps1
+  BronzeBucketName: { Value: !Ref BronzeBucket }           # raw rows
+  SilverBucketName: { Value: !Ref SilverBucket }           # Silver + reports
+  GoldBucketName: { Value: !Ref GoldBucket }               # Gold
+  AthenaResultsBucketName: { Value: !Ref AthenaResultsBucket }  # query results
+  IngestFunctionName: { Value: !Ref IngestFunction }       # Lambda
+  GlueJobName: { Value: !Ref BuildSilverGoldJob }          # Glue job
+  WorkGroupName: { Value: !Ref AthenaWorkGroup }           # Athena workgroup
+  DatabaseName: { Value: !Ref ClickstreamDatabase }        # clickstream_t1

@@ -221,6 +221,43 @@ def unscoped_name_problems(template: dict) -> list[str]:                # explic
     return problems                                                     # empty when every name is stack-scoped
 
 
+# ── T1a rules: Glue jobs, Lambda concurrency, catalog names ───
+ATHENA_NAME = re.compile(r"^[a-z][a-z0-9_]*$")                          # Athena-safe database/table name
+LAMBDA_TYPES = {"AWS::Serverless::Function", "AWS::Lambda::Function"}   # function resource types
+
+
+def glue_job_problems(template: dict) -> list[str]:                     # bounded, self-contained Glue jobs
+    problems = []                                                       # collected problems
+    for name, body in _resources(template).items():                     # each resource
+        if (body or {}).get("Type") != "AWS::Glue::Job":                # Glue jobs only
+            continue                                                    # skip others
+        properties = body.get("Properties") or {}                       # job settings
+        timeout = properties.get("Timeout")                             # minutes
+        if not isinstance(timeout, int) or timeout > 30:                # default is 480 min on Glue 5.0+
+            problems.append(f"{name}: Timeout must be set and at most 30 minutes")  # report
+        if "--TempDir" not in (properties.get("DefaultArguments") or {}):  # no temp path of our own
+            problems.append(f"{name}: DefaultArguments has no --TempDir (Glue may create its own temp bucket)")  # report
+    return problems                                                     # empty when every job is bounded
+
+
+def lambda_concurrency_problems(template: dict) -> list[str]:           # every function has a concurrency cap
+    return [f"{name}: ReservedConcurrentExecutions not set" for name, body in _resources(template).items()  # report each
+            if (body or {}).get("Type") in LAMBDA_TYPES and "ReservedConcurrentExecutions" not in (body.get("Properties") or {})]  # uncapped functions
+
+
+def catalog_name_problems(template: dict) -> list[str]:                 # Glue catalog names Athena can use
+    problems = []                                                       # collected problems
+    nested = {"AWS::Glue::Database": "DatabaseInput", "AWS::Glue::Table": "TableInput"}  # where the name lives
+    for name, body in _resources(template).items():                     # each resource
+        holder = nested.get((body or {}).get("Type"))                   # DatabaseInput / TableInput, if a catalog object
+        if not holder:                                                  # not a catalog object
+            continue                                                    # skip
+        value = ((body.get("Properties") or {}).get(holder) or {}).get("Name")  # the configured name
+        if not isinstance(value, str) or not ATHENA_NAME.match(value):  # missing, !Sub, or has hyphens/upper case
+            problems.append(f"{name}: {holder}.Name must be set, lowercase letters, digits or _")  # report
+    return problems                                                     # empty when every name is Athena-safe
+
+
 ALL_TEMPLATE_RULES = [                                                  # every rule that takes a template
     unencrypted_bucket_problems,                                        # encryption at rest
     public_bucket_problems,                                             # no public access
@@ -231,4 +268,7 @@ ALL_TEMPLATE_RULES = [                                                  # every 
     iam_user_problems,                                                  # no IAM users or keys
     named_iam_problems,                                                 # no explicit IAM names
     unscoped_name_problems,                                             # stack-scoped names
+    glue_job_problems,                                                  # bounded, self-contained Glue jobs
+    lambda_concurrency_problems,                                        # every function has a concurrency cap
+    catalog_name_problems,                                              # Athena-compatible catalog names
 ]
