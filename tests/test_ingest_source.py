@@ -1,6 +1,7 @@
 # ── Tests: ingest Lambda (no network, stubbed S3) ─────────────
 import hashlib                                                          # checksums
 import importlib.util                                                   # load the handler from its folder
+import inspect                                                          # introspect function signatures
 import io                                                               # in-memory zip
 import zipfile                                                          # build a fake UCI zip
 from pathlib import Path                                                # file paths
@@ -16,6 +17,7 @@ spec.loader.exec_module(ingest)                                         # run it
 
 HEADER = "year;month;day;order;country;session ID;page 1 (main category);page 2 (clothing model);colour;location;model photography;price;price 2;page"  # real UCI header
 CSV_TEXT = "\r\n".join([HEADER, "2008;4;1;1;29;1;1;A13;1;5;1;28;2;1", "2008;4;1;2;29;1;1;A16;1;6;1;33;2;1", "2008;8;13;1;29;9;2;B4;3;2;1;52;1;1"]) + "\r\n"  # CRLF like the real file
+LAMBDA_TIMEOUT_SECONDS = 60                                             # Lambda function timeout (fixed in global constraints)
 
 
 def fake_zip(text=CSV_TEXT):                                            # zip holding the CSV, like UCI's
@@ -57,6 +59,15 @@ def test_download_gives_up_after_three_attempts():                      # perman
         raise OSError("down")                                           # network error
     with pytest.raises(ingest.IngestError, match="3 attempts"):          # clear failure
         ingest.download("https://example.test/x.zip", opener=opener, sleep=lambda seconds: None)  # no real waiting
+
+
+def test_download_retry_budget_fits_in_lambda_timeout():                # worst case must not exceed Lambda timeout
+    sig = inspect.signature(ingest.download)                            # download function signature
+    attempts = sig.parameters["attempts"].default                       # number of retry attempts
+    first_wait = sig.parameters["first_wait"].default                   # initial backoff wait (seconds)
+    per_attempt_timeout = ingest.ATTEMPT_TIMEOUT_SECONDS                # timeout per attempt (seconds)
+    total_time = attempts * per_attempt_timeout + first_wait + first_wait * 2.0  # worst case: all attempts timeout + waits
+    assert total_time < LAMBDA_TIMEOUT_SECONDS                          # must fit inside Lambda timeout
 
 
 def test_land_months_writes_new_month():                                # nothing there yet

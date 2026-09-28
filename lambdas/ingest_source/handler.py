@@ -18,6 +18,7 @@ SOURCE_URL = os.environ.get("SOURCE_URL", "https://archive.ics.uci.edu/static/pu
 SOURCE_MD5 = os.environ.get("SOURCE_MD5", "bf7a47493025ffb35eebc7a65caf9988")  # checksum measured 2026-09-25 (data/README.md)
 CSV_NAME = "e-shop clothing 2008.csv"                                   # file inside the zip
 VALID_MONTHS = {"2008-04", "2008-05", "2008-06", "2008-07", "2008-08"}  # months present in the dataset
+ATTEMPT_TIMEOUT_SECONDS = 15                                            # per-attempt socket timeout; 3 tries + backoff stays under the 60 s Lambda timeout
 logger = logging.getLogger()                                            # Lambda's root logger
 logger.setLevel(logging.INFO)                                           # info and above
 
@@ -30,7 +31,7 @@ class IngestError(Exception):                                           # any fa
 def download(url, attempts=3, first_wait=1.0, opener=urllib.request.urlopen, sleep=time.sleep):  # fetch bytes with retries
     for attempt in range(1, attempts + 1):                              # 1, 2, 3
         try:                                                            # one attempt
-            with opener(url, timeout=20) as response:                   # HTTPS request
+            with opener(url, timeout=ATTEMPT_TIMEOUT_SECONDS) as response:  # HTTPS request
                 return response.read()                                  # whole body (about 0.8 MB)
         except OSError as error:                                        # URLError, timeouts and resets are OSErrors
             if attempt == attempts:                                     # out of attempts
