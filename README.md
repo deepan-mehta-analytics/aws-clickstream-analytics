@@ -26,6 +26,7 @@ nothing per month once it is published.
 [![Parquet](https://img.shields.io/badge/Storage-Parquet-50ABF1?style=for-the-badge)](https://parquet.apache.org/)
 [![AWS](https://img.shields.io/badge/AWS-Mumbai_(planned)-FF9900?style=for-the-badge&logo=amazonwebservices&logoColor=white)](docs/adr/0001-ingest-and-warehouse-stack.md)
 [![Status](https://img.shields.io/badge/Status-In_Development-yellow?style=for-the-badge)](PROJECT-STATUS.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
@@ -61,9 +62,10 @@ a Redshift Serverless window, and a Streamlit dashboard. See the Roadmap.
 | Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| Testing | pytest 9 | 72 tests, including full-file reconciliation, template guardrails and a local Spark harness |
+| Distributed processing (T1a, built locally) | PySpark 4.1.1 (same as AWS Glue 6.0), Java 17/21 | Spark Silver/Gold job for Glue, checked row-for-row against pandas on the full file |
+| Testing | pytest 9 | 108 tests on Linux CI (4 lake-storage tests are skipped on Windows), including full-file reconciliation, pandas-vs-Spark parity and template guardrails |
 | Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
-| CI | GitHub Actions | Hygiene, lint and tests; downloads the dataset and verifies its MD5 (runs once the repo has a remote) |
+| CI | GitHub Actions | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
 | Infrastructure as code | AWS SAM + CloudFormation, `cfn-lint` | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
 | Dashboard (planned) | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
@@ -117,9 +119,13 @@ Design decisions are recorded as ADRs:
 
 ```
 aws-clickstream-analytics/
-├── src/clickstream/            ← the pipeline package, one module per stage
+├── src/clickstream/            ← the pandas pipeline package (local twin), one module per stage
+├── src/clickstream_spark/      ← the same stages in PySpark for the Glue job (T1a)
+├── lambdas/ingest_source/      ← Lambda that downloads the UCI file into S3 Bronze (T1a, not deployed)
+├── glue/build_silver_gold.py   ← Glue 6.0 job entry point: new Bronze files → Silver and Gold (not deployed)
+├── scripts/build_glue_libs.py  ← builds the library zip the Glue job imports
 ├── sql/summaries/              ← dashboard SQL, portable to Athena/Redshift
-├── tests/                      ← 72 pytest tests incl. full-file reconciliation, template guardrails, Spark harness
+├── tests/                      ← 108 pytest tests incl. full-file reconciliation, pandas-vs-Spark parity, template guardrails
 ├── data/README.md              ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                    ← architecture decision records (0001–0004 + cost annex)
@@ -129,7 +135,7 @@ aws-clickstream-analytics/
 │   ├── exam-guide-delta.md     ← exam guide re-check log
 │   └── GAPS.md                 ← what is verified, open or accepted as a limitation
 ├── infra/                      ← CloudFormation/SAM stacks (foundation written; owner-deployed only)
-├── glue/  dashboards/          ← placeholders for the cloud tiers (each has a README)
+├── dashboards/                 ← placeholder for the dashboard tier (has a README)
 ├── .github/workflows/ci.yml    ← hygiene, lint (ruff + cfn-lint), tests
 ├── Makefile                    ← working local targets; cloud targets say "owner-run only"
 ├── pyproject.toml              ← package and pinned dependencies
@@ -145,7 +151,7 @@ aws-clickstream-analytics/
 
 #### 1. Clone and create a virtual environment
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/deepan-mehta-analytics/aws-clickstream-analytics.git
 cd aws-clickstream-analytics
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
@@ -167,8 +173,8 @@ and `quality_report.json`.
 ### ☁️ Option 2 — GitHub Actions
 
 `.github/workflows/ci.yml` runs the hygiene check, ruff, cfn-lint and the
-full test suite on every push. It downloads the dataset and checks its MD5 first. It
-has not run yet, because the repository has no remote.
+full test suite on every push. It downloads the dataset and checks its MD5 first,
+so the full-file and pandas-vs-Spark tests run for real there.
 
 ---
 
@@ -180,7 +186,7 @@ has not run yet, because the repository has no remote.
 .venv/Scripts/cfn-lint
 ```
 
-72 tests. They cover:
+108 tests on Linux CI (104 run and 4 skip on Windows). They cover:
 - the reader and codebook;
 - repeatable seeded enrichment, including a 195-click visit near midnight;
 - Bronze resends;
@@ -190,7 +196,9 @@ has not run yet, because the repository has no remote.
 - the end-to-end run;
 - `test_full_file.py`, which checks the real file against the measured stats. It is skipped when the dataset is not downloaded;
 - `test_infra_templates.py`, which checks every CloudFormation template for encryption, private buckets, TLS-only policies, safe IAM (no admin or public grants) and no account IDs in any committed file;
-- `test_spark_session.py`, which checks the local Spark session uses the same settings as the AWS Glue 6.0 job (tier T1, in progress). Spark tests need `pip install -e ".[dev,spark]"` and Java 17 or 21 (`SPARK_JAVA_HOME`); without them they are skipped with a clear reason.
+- `test_spark_session.py`, which checks the local Spark session uses the same settings as the AWS Glue 6.0 job;
+- the Spark stages (`test_spark_*.py`), including `test_spark_full_file.py`, which checks Spark and pandas agree on the full file, and `test_spark_storage.py`, which checks monthly lake writes and reruns (skipped on Windows);
+- `test_ingest_source.py` (the ingest Lambda) and `test_glue_packaging.py` (the library zip). Spark tests need `pip install -e ".[dev,spark]"` and Java 17 or 21 (`SPARK_JAVA_HOME`); without them they are skipped with a clear reason.
 
 ---
 
