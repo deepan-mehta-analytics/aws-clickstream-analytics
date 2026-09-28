@@ -261,3 +261,15 @@ def test_catalog_name_rule_flags_missing_and_hyphenated_names():        # Athena
         "Tbl": {"Type": "AWS::Glue::Table", "Properties": {"TableInput": {"Name": "gold-visits"}}},  # hyphen
     }}
     assert catalog_name_problems(template) == ["Db: DatabaseInput.Name must be set, lowercase letters, digits or _", "Tbl: TableInput.Name must be set, lowercase letters, digits or _"]  # both flagged
+
+
+# ── Fix round 1 (Task 9 review) ────────────────────────────────
+def test_glue_job_rule_flags_bool_and_out_of_range_timeout():           # minor 4: a real int, 1-30 only
+    template = {"Resources": {                                          # two more bad timeouts
+        "BoolJob": {"Type": "AWS::Glue::Job", "Properties": {"Timeout": True, "DefaultArguments": {"--TempDir": "s3://x/"}}},  # bool is not a real int
+        "ZeroJob": {"Type": "AWS::Glue::Job", "Properties": {"Timeout": 0, "DefaultArguments": {"--TempDir": "s3://x/"}}},  # zero minutes is not bounded work
+    }}
+    assert glue_job_problems(template) == [                             # both flagged
+        "BoolJob: Timeout must be set and at most 30 minutes",          # True == 1 but is not a real int
+        "ZeroJob: Timeout must be set and at most 30 minutes",          # 0 is out of the 1-30 range
+    ]

@@ -9,13 +9,13 @@ Parameters:                                                # values supplied at 
   ArtifactsBucketName:                                     # foundation stack output
     Type: String                                           # bucket name
     Description: ArtifactsBucketName output of the clickstream-foundation stack  # where the Glue code is uploaded
-  GlueScriptKey:                                            # Glue script object key
+  GlueScriptKey:                                           # Glue script object key
     Type: String                                           # S3 key
     Default: t1-lake/glue/build_silver_gold.py             # uploaded by scripts/t1a-upload-glue-code.ps1
-  GlueLibrariesKey:                                         # library zip object key
+  GlueLibrariesKey:                                        # library zip object key
     Type: String                                           # S3 key
     Default: t1-lake/glue-libs/clickstream_libs.zip        # uploaded by the same script
-  GlueVersion:                                              # Glue runtime
+  GlueVersion:                                             # Glue runtime
     Type: String                                           # version text
     Default: "6.0"                                         # Spark 4.1.1, Python 3.13
     AllowedValues: ["6.0", "5.1"]                          # 5.1 (Spark 3.5.6) only if 6.0 is not offered in ap-south-1
@@ -123,74 +123,74 @@ Resources:                                                 # everything this sta
           - Id: ExpireQueryResults                         # no pile-up of query result files
             Status: Enabled                                # active
             ExpirationInDays: 1                             # gone after one day
-  BronzeBucketPolicy:                                       # denies any request made without TLS
-    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
-    Properties:                                             # policy settings
-      Bucket: !Ref BronzeBucket                             # attached to the Bronze bucket
-      PolicyDocument:                                       # IAM policy document
-        Version: "2012-10-17"                               # current policy language version
-        Statement:                                          # one statement
-          - Sid: DenyRequestsWithoutTls                     # statement label
-            Effect: Deny                                    # explicit deny beats any allow
-            Principal: "*"                                  # applies to every caller
-            Action: "s3:*"                                  # every S3 action
-            Resource:                                       # the bucket and every object in it
-              - !GetAtt BronzeBucket.Arn                     # the bucket itself
-              - !Sub "${BronzeBucket.Arn}/*"                # every object in the bucket
-            Condition:                                      # only when...
-              Bool:                                         # boolean condition
-                aws:SecureTransport: "false"                # ...the request did not use TLS
-  SilverBucketPolicy:                                        # denies any request made without TLS
-    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
-    Properties:                                             # policy settings
-      Bucket: !Ref SilverBucket                              # attached to the Silver bucket
-      PolicyDocument:                                       # IAM policy document
-        Version: "2012-10-17"                               # current policy language version
-        Statement:                                          # one statement
-          - Sid: DenyRequestsWithoutTls                     # statement label
-            Effect: Deny                                    # explicit deny beats any allow
-            Principal: "*"                                  # applies to every caller
-            Action: "s3:*"                                  # every S3 action
-            Resource:                                       # the bucket and every object in it
-              - !GetAtt SilverBucket.Arn                     # the bucket itself
-              - !Sub "${SilverBucket.Arn}/*"                # every object in the bucket
-            Condition:                                      # only when...
-              Bool:                                         # boolean condition
-                aws:SecureTransport: "false"                # ...the request did not use TLS
-  GoldBucketPolicy:                                          # denies any request made without TLS
-    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
-    Properties:                                             # policy settings
-      Bucket: !Ref GoldBucket                                # attached to the Gold bucket
-      PolicyDocument:                                       # IAM policy document
-        Version: "2012-10-17"                               # current policy language version
-        Statement:                                          # one statement
-          - Sid: DenyRequestsWithoutTls                     # statement label
-            Effect: Deny                                    # explicit deny beats any allow
-            Principal: "*"                                  # applies to every caller
-            Action: "s3:*"                                  # every S3 action
-            Resource:                                       # the bucket and every object in it
-              - !GetAtt GoldBucket.Arn                       # the bucket itself
-              - !Sub "${GoldBucket.Arn}/*"                  # every object in the bucket
-            Condition:                                      # only when...
-              Bool:                                         # boolean condition
-                aws:SecureTransport: "false"                # ...the request did not use TLS
-  AthenaResultsBucketPolicy:                                 # denies any request made without TLS
-    Type: AWS::S3::BucketPolicy                             # S3 bucket policy
-    Properties:                                             # policy settings
-      Bucket: !Ref AthenaResultsBucket                       # attached to the Athena results bucket
-      PolicyDocument:                                       # IAM policy document
-        Version: "2012-10-17"                               # current policy language version
-        Statement:                                          # one statement
-          - Sid: DenyRequestsWithoutTls                     # statement label
-            Effect: Deny                                    # explicit deny beats any allow
-            Principal: "*"                                  # applies to every caller
-            Action: "s3:*"                                  # every S3 action
-            Resource:                                       # the bucket and every object in it
-              - !GetAtt AthenaResultsBucket.Arn               # the bucket itself
-              - !Sub "${AthenaResultsBucket.Arn}/*"          # every object in the bucket
-            Condition:                                      # only when...
-              Bool:                                         # boolean condition
-                aws:SecureTransport: "false"                # ...the request did not use TLS
+  BronzeBucketPolicy:                                      # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                            # S3 bucket policy
+    Properties:                                            # policy settings
+      Bucket: !Ref BronzeBucket                            # attached to the Bronze bucket
+      PolicyDocument:                                      # IAM policy document
+        Version: "2012-10-17"                              # current policy language version
+        Statement:                                         # one statement
+          - Sid: DenyRequestsWithoutTls                    # statement label
+            Effect: Deny                                   # explicit deny beats any allow
+            Principal: "*"                                 # applies to every caller
+            Action: "s3:*"                                 # every S3 action
+            Resource:                                      # the bucket and every object in it
+              - !GetAtt BronzeBucket.Arn                   # the bucket itself
+              - !Sub "${BronzeBucket.Arn}/*"               # every object in the bucket
+            Condition:                                     # only when...
+              Bool:                                        # boolean condition
+                aws:SecureTransport: "false"               # ...the request did not use TLS
+  SilverBucketPolicy:                                      # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                            # S3 bucket policy
+    Properties:                                            # policy settings
+      Bucket: !Ref SilverBucket                            # attached to the Silver bucket
+      PolicyDocument:                                      # IAM policy document
+        Version: "2012-10-17"                              # current policy language version
+        Statement:                                         # one statement
+          - Sid: DenyRequestsWithoutTls                    # statement label
+            Effect: Deny                                   # explicit deny beats any allow
+            Principal: "*"                                 # applies to every caller
+            Action: "s3:*"                                 # every S3 action
+            Resource:                                      # the bucket and every object in it
+              - !GetAtt SilverBucket.Arn                   # the bucket itself
+              - !Sub "${SilverBucket.Arn}/*"               # every object in the bucket
+            Condition:                                     # only when...
+              Bool:                                        # boolean condition
+                aws:SecureTransport: "false"               # ...the request did not use TLS
+  GoldBucketPolicy:                                        # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                            # S3 bucket policy
+    Properties:                                            # policy settings
+      Bucket: !Ref GoldBucket                              # attached to the Gold bucket
+      PolicyDocument:                                      # IAM policy document
+        Version: "2012-10-17"                              # current policy language version
+        Statement:                                         # one statement
+          - Sid: DenyRequestsWithoutTls                    # statement label
+            Effect: Deny                                   # explicit deny beats any allow
+            Principal: "*"                                 # applies to every caller
+            Action: "s3:*"                                 # every S3 action
+            Resource:                                      # the bucket and every object in it
+              - !GetAtt GoldBucket.Arn                     # the bucket itself
+              - !Sub "${GoldBucket.Arn}/*"                 # every object in the bucket
+            Condition:                                     # only when...
+              Bool:                                        # boolean condition
+                aws:SecureTransport: "false"               # ...the request did not use TLS
+  AthenaResultsBucketPolicy:                               # denies any request made without TLS
+    Type: AWS::S3::BucketPolicy                            # S3 bucket policy
+    Properties:                                            # policy settings
+      Bucket: !Ref AthenaResultsBucket                     # attached to the Athena results bucket
+      PolicyDocument:                                      # IAM policy document
+        Version: "2012-10-17"                              # current policy language version
+        Statement:                                         # one statement
+          - Sid: DenyRequestsWithoutTls                    # statement label
+            Effect: Deny                                   # explicit deny beats any allow
+            Principal: "*"                                 # applies to every caller
+            Action: "s3:*"                                 # every S3 action
+            Resource:                                      # the bucket and every object in it
+              - !GetAtt AthenaResultsBucket.Arn            # the bucket itself
+              - !Sub "${AthenaResultsBucket.Arn}/*"        # every object in the bucket
+            Condition:                                     # only when...
+              Bool:                                        # boolean condition
+                aws:SecureTransport: "false"               # ...the request did not use TLS
 
   # ── Ingest Lambda ───────────────────────────────────────────
   IngestFunction:                                          # lands raw rows by month
@@ -252,7 +252,9 @@ Resources:                                                 # everything this sta
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/t1-lake/*"  # script and zip only
               - Effect: Allow                              # job logs
                 Action: [logs:CreateLogStream, logs:PutLogEvents]  # write log lines
-                Resource: !Sub "${GlueLogGroup.Arn}:*"     # our log group's streams
+                Resource:                                  # both custom-logging groups' streams (built, not .Arn: that attribute already ends in :*)
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws-glue/${AWS::StackName}/error:*"  # error group streams
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws-glue/${AWS::StackName}/output:*"  # output group streams
               - Effect: Allow                              # default Glue output/error logs
                 Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]  # write log lines
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws-glue/*"  # Glue's own groups
@@ -262,11 +264,17 @@ Resources:                                                 # everything this sta
                 Condition:                                 # but only in the Glue namespace
                   StringEquals:                            # exact match
                     cloudwatch:namespace: Glue             # Glue metrics
-  GlueLogGroup:                                            # continuous driver logs
+  GlueErrorLogGroup:                                       # driver error output (Glue 5.0+ custom logging)
     Type: AWS::Logs::LogGroup                              # CloudWatch Logs
     DeletionPolicy: Delete                                 # removed with the stack
     Properties:                                            # settings
-      LogGroupName: !Sub "/aws-glue/${AWS::StackName}"     # stack-scoped name
+      LogGroupName: !Sub "/aws-glue/${AWS::StackName}/error"  # matches --custom-logGroup-prefix
+      RetentionInDays: 7                                   # no slow storage leak
+  GlueOutputLogGroup:                                      # driver stdout/progress output (Glue 5.0+ custom logging)
+    Type: AWS::Logs::LogGroup                              # CloudWatch Logs
+    DeletionPolicy: Delete                                 # removed with the stack
+    Properties:                                            # settings
+      LogGroupName: !Sub "/aws-glue/${AWS::StackName}/output"  # matches --custom-logGroup-prefix
       RetentionInDays: 7                                   # no slow storage leak
   BuildSilverGoldJob:                                      # the Spark job
     Type: AWS::Glue::Job                                   # Glue ETL job
@@ -294,8 +302,7 @@ Resources:                                                 # everything this sta
         "--gold_path": !Sub "s3://${GoldBucket}"           # Gold root
         "--reports_bucket": !Ref SilverBucket              # quality reports under _reports/
         "--enable-metrics": "true"                         # job metrics
-        "--enable-continuous-cloudwatch-log": "true"       # stream driver logs while running
-        "--continuous-log-logGroup": !Ref GlueLogGroup     # into our 7-day group
+        "--custom-logGroup-prefix": !Sub "/aws-glue/${AWS::StackName}"  # writes to <prefix>/error and <prefix>/output (Glue 5.0+ custom logging; --enable-continuous-cloudwatch-log is deprecated)
 
   # ── Glue Data Catalog ──────────────────────────────────────
   ClickstreamDatabase:                                     # Athena database
@@ -533,12 +540,12 @@ Resources:                                                 # everything this sta
           Columns:                                         # data columns, PRODUCT_COLUMNS order (tested)
             - { Name: product_code, Type: string }         # product
             - { Name: category, Type: string }             # most frequent decoded category
-            - { Name: colour, Type: string }                # decoded colour
-            - { Name: price_usd, Type: bigint }             # price
+            - { Name: colour, Type: string }               # decoded colour
+            - { Name: price_usd, Type: bigint }            # price
             - { Name: priced_above_category_average, Type: boolean }  # flag
             - { Name: page_number_in_shop, Type: bigint }  # listing page
             - { Name: photo_position_on_page, Type: string }  # placement
-            - { Name: photo_angle, Type: string }           # angle
+            - { Name: photo_angle, Type: string }          # angle
   GoldCountriesTable:                                      # Gold countries (static reference table)
     Type: AWS::Glue::Table                                 # catalog table
     Properties:                                            # settings
@@ -617,8 +624,8 @@ Resources:                                                 # everything this sta
           Columns:                                         # data columns
             - { Name: visit_date, Type: date }             # one row per day
             - { Name: visits, Type: bigint }               # visit count
-            - { Name: clicks, Type: bigint }                # click count
-            - { Name: bounce_rate, Type: double }           # bounced visits / visits
+            - { Name: clicks, Type: bigint }               # click count
+            - { Name: bounce_rate, Type: double }          # bounced visits / visits
   GoldSummaryVisitDepthFunnelTable:                        # Gold summaries/visit_depth_funnel (dashboard summary)
     Type: AWS::Glue::Table                                 # catalog table
     Properties:                                            # settings

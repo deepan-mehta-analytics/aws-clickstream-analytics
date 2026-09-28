@@ -2,6 +2,8 @@
 import ast                                                              # read the Glue script's argument list
 from pathlib import Path                                                # file paths
 
+import pytest                                                           # skip pyspark-only checks when it is absent
+
 from infra_rules import load_template                                   # CloudFormation-aware YAML loader
 
 REPO = Path(__file__).resolve().parents[1]                              # repo root
@@ -15,6 +17,15 @@ def of_type(kind):                                                      # resour
 
 def table(name):                                                        # a catalog table by its Athena name
     return next(body["Properties"]["TableInput"] for body in of_type("AWS::Glue::Table").values() if body["Properties"]["TableInput"]["Name"] == name)  # its TableInput
+
+
+def _sub_text(value):                                                   # raw !Sub text, or a plain string
+    text = value.get("Fn::Sub") if isinstance(value, dict) else value    # !Sub text or a plain string
+    return text[0] if isinstance(text, list) else text                  # list form: first item is the text
+
+
+def _ddl_names(schema: str) -> list[str]:                               # column names from a Spark DDL-format schema string
+    return [part.strip().split(" ", 1)[0] for part in schema.split(",")]  # "name type, name type" -> ["name", "name"]
 
 
 def test_only_bronze_is_versioned():                                    # versioning is per bucket
@@ -59,6 +70,10 @@ def test_partitioned_tables_use_projection():                           # no cra
             key = table_input["PartitionKeys"][0]["Name"]               # e.g. click_month
             assert parameters["projection.enabled"] == "true" and parameters[f"projection.{key}.format"] == "yyyy-MM"  # monthly projection
             assert "storage.location.template" in parameters            # where each month lives
+            location = _sub_text(table_input["StorageDescriptor"]["Location"])  # table root, as written
+            template = _sub_text(parameters["storage.location.template"])  # per-partition path, as written
+            assert template.startswith(location)                       # each month lives under the table root
+            assert f"${{!{key}}}" in template                          # keyed by the partition value (${!name} escapes Athena's own ${...})
 
 
 def test_table_columns_match_the_code():                                # template stays in step with the Spark output
@@ -72,3 +87,27 @@ def test_table_columns_match_the_code():                                # templa
     assert names("gold_visits") == VISIT_COLUMNS                        # same
     assert names("gold_products") == PRODUCT_COLUMNS                    # whole table
     assert names("gold_calendar_days") == CALENDAR_COLUMNS              # whole table
+
+
+# ── Fix round 1 (Task 9 review) ────────────────────────────────
+def test_more_table_columns_match_the_code():                           # minor 1: rejected/countries/devices too
+    pytest.importorskip("pyspark", reason="install the spark extra: pip install -e .[dev,spark]")  # these constants live in a pyspark-importing module
+    from clickstream_spark.gold import COUNTRY_SCHEMA, DEVICE_SCHEMA     # static reference table shapes
+    from clickstream_spark.silver import REJECTED_COLUMNS               # clicks_rejected shape
+    def names(table_name):                                              # data + partition columns
+        table_input = table(table_name)                                 # definition
+        return [c["Name"] for c in table_input["StorageDescriptor"]["Columns"]] + [c["Name"] for c in table_input.get("PartitionKeys", [])]  # in order
+    assert names("silver_clicks_rejected") == REJECTED_COLUMNS          # partition column last, as Spark writes it
+    assert names("gold_countries") == _ddl_names(COUNTRY_SCHEMA)        # static reference table
+    assert names("gold_devices") == _ddl_names(DEVICE_SCHEMA)           # static reference table
+
+
+def test_glue_job_uses_custom_logging_not_deprecated_continuous_log():  # Finding A: Glue 5.0+ deprecates continuous logging
+    arguments = RESOURCES["BuildSilverGoldJob"]["Properties"]["DefaultArguments"]  # job arguments
+    assert "--enable-continuous-cloudwatch-log" not in arguments        # deprecated on Glue 5.0+ (custom logging replaces it)
+    assert "--continuous-log-logGroup" not in arguments                 # deprecated on Glue 5.0+
+    assert _sub_text(arguments["--custom-logGroup-prefix"]) == "/aws-glue/${AWS::StackName}"  # its replacement
+    for suffix in ("error", "output"):                                  # both halves of custom logging
+        group = RESOURCES[f"Glue{suffix.capitalize()}LogGroup"]["Properties"]  # the log group
+        assert _sub_text(group["LogGroupName"]) == f"/aws-glue/${{AWS::StackName}}/{suffix}"  # matches the prefix
+        assert group["RetentionInDays"] == 7                            # no slow storage leak

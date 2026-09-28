@@ -233,7 +233,8 @@ def glue_job_problems(template: dict) -> list[str]:                     # bounde
             continue                                                    # skip others
         properties = body.get("Properties") or {}                       # job settings
         timeout = properties.get("Timeout")                             # minutes
-        if not isinstance(timeout, int) or timeout > 30:                # default is 480 min on Glue 5.0+
+        real_int = isinstance(timeout, int) and not isinstance(timeout, bool)  # bool is an int subclass; reject it explicitly
+        if not real_int or not (1 <= timeout <= 30):                    # default is 480 min on Glue 5.0+; 0 or negative is not bounded work
             problems.append(f"{name}: Timeout must be set and at most 30 minutes")  # report
         if "--TempDir" not in (properties.get("DefaultArguments") or {}):  # no temp path of our own
             problems.append(f"{name}: DefaultArguments has no --TempDir (Glue may create its own temp bucket)")  # report
