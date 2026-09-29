@@ -33,7 +33,7 @@ nothing per month once it is published.
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![pytest](https://img.shields.io/badge/pytest-134_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
+[![pytest](https://img.shields.io/badge/pytest-136_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-T0_Verified_·_T1a_In_Development-yellow?style=for-the-badge)](PROJECT-STATUS.md)
 [![Exam coverage](https://img.shields.io/badge/DEA--C01-8%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
@@ -93,7 +93,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 | 🗄️ Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | 🦆 Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | 🕒 Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 Testing | pytest 9 | 134 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧪 Testing | pytest 9 | 136 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
 | 🧹 Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
 | ⚙️ CI | GitHub Actions | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | ☁️ Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
@@ -174,7 +174,7 @@ flowchart LR
 |---|---|---|
 | 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0004 accepted; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
-| T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally (10 of 14 plan tasks); not deployed |
+| T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally (11 of 14 plan tasks); not deployed |
 | T1b–T1d | Iceberg Silver, ingest extras, evidence pass | ⏳ |
 | T2 | Orchestration, data-quality alerts, monitoring | ⏳ |
 | T3 + T4 | Streaming window + Redshift Serverless window | ⏳ |
@@ -219,7 +219,7 @@ aws-clickstream-analytics/
 ├── infra/foundation/template.yaml   ← artifacts-bucket stack (owner-deployed only)
 ├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup (not deployed)
 │
-├── tests/                           ← 134 pytest tests (see tests/README.md)
+├── tests/                           ← 136 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                         ← ADRs 0001–0004 + cost-tier annex
@@ -288,7 +288,7 @@ full-file and pandas-vs-Spark tests run for real there.
 
 ```bash
 .venv/Scripts/python -m ruff check src tests
-.venv/Scripts/python -m pytest -v        # → 134 passed on Linux CI (130 run, 4 skipped on Windows)
+.venv/Scripts/python -m pytest -v        # → 136 passed on Linux CI (132 run, 4 skipped on Windows)
 .venv/Scripts/cfn-lint
 ```
 
@@ -346,7 +346,7 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | Run | What it did | Duration |
 |---|---|---|
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
-| Full test suite on GitHub Actions | 108–134 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
+| Full test suite on GitHub Actions | 108–136 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
 💰 **Cloud cost (estimate, not measured):** about ₹110 one-time for the full
 hybrid build if the Redshift Serverless trial applies, and ₹0/month after
@@ -382,7 +382,7 @@ without a real run behind it.
 ## 🔜 Roadmap
 
 - [x] T0: local twin (Bronze → Silver → Gold → summaries, verified on the full file)
-- [ ] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena): code, SAM stack and owner tooling built and tested locally, 10 of 14 plan tasks done
+- [ ] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena): code, SAM stack and owner tooling built and tested locally, 11 of 14 plan tasks done
 - [ ] T1b–T1d: Iceberg Silver, ingest extras, evidence pass
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window
