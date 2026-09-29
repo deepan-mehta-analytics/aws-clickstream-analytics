@@ -40,3 +40,12 @@ def test_rerun_replaces_output_instead_of_appending(tmp_path):         # idempot
     run_local_pipeline(source, tmp_path / "out", RECEIVED)              # second run
     clicks = pd.read_parquet(tmp_path / "out" / "gold" / "clicks")      # read back all partitions
     assert len(clicks) == 1                                             # not duplicated
+
+
+def test_parquet_timestamps_are_microseconds(tmp_path):                 # T1-prep: Athena-friendly timestamp unit
+    import pyarrow.parquet as pq                                        # read the schema
+    from clickstream.local_run import write_table                       # code under test
+    frame = pd.DataFrame({"t": pd.to_datetime(["2008-04-01 10:00:00"]).tz_localize("UTC")})  # one timestamp
+    write_table(frame, tmp_path / "table")                              # write it
+    unit = pq.read_schema(tmp_path / "table" / "table.parquet").field("t").type.unit  # stored unit
+    assert unit == "us"                                                 # microseconds, not nanoseconds

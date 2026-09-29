@@ -52,3 +52,10 @@ def test_empty_input_returns_empty_frame_with_new_columns():            # empty 
     assert enriched.empty                                               # still empty
     assert {"click_id", "click_time_synthetic", "device_type_synthetic"} <= set(enriched.columns)  # columns exist
     assert str(enriched["click_time_synthetic"].dtype) == "datetime64[ns, UTC]"  # correct type even when empty
+
+
+def test_shop_time_to_utc_handles_dst_edges():                          # T1-prep: DST-safe localisation
+    from clickstream.enrichment import shop_time_to_utc                 # code under test
+    local = pd.Series(pd.to_datetime(["2008-03-30 02:30:00", "2008-10-26 02:30:00"]))  # a missing hour and an ambiguous hour in Warsaw
+    utc = shop_time_to_utc(local)                                       # must not raise
+    assert list(utc.dt.strftime("%Y-%m-%d %H:%M")) == ["2008-03-30 01:00", "2008-10-26 01:30"]  # shifted forward; ambiguous read as standard time (CET, UTC+1)

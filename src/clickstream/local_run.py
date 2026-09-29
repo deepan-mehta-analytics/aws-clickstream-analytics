@@ -23,9 +23,9 @@ def write_table(frame: pd.DataFrame, folder: Path, partition_column: str | None 
         shutil.rmtree(folder)                                           # replace, never append
     folder.mkdir(parents=True)                                          # create the table folder
     if partition_column and not frame.empty:                            # partitioned tables (monthly)
-        frame.to_parquet(folder, partition_cols=[partition_column], index=False)  # one sub-folder per month
+        frame.to_parquet(folder, partition_cols=[partition_column], index=False, coerce_timestamps="us", allow_truncated_timestamps=True)  # microseconds: what Athena and Spark read natively
     else:                                                               # small or empty tables
-        frame.to_parquet(folder / f"{folder.name}.parquet", index=False)  # a single file
+        frame.to_parquet(folder / f"{folder.name}.parquet", index=False, coerce_timestamps="us", allow_truncated_timestamps=True)  # microseconds: what Athena and Spark read natively
 
 
 def run_local_pipeline(source_csv: Path, output_dir: Path, received_time: pd.Timestamp, seed: int = DEFAULT_SEED, resend_every: int = 0) -> dict:  # end to end

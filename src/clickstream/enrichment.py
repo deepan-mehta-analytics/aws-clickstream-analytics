@@ -12,6 +12,11 @@ DEVICE_WEIGHTS = {"desktop": 0.85, "mobile": 0.10, "tablet": 0.05}      # illust
 SECONDS_IN_DAY = 86_400                                                 # seconds in one day
 
 
+def shop_time_to_utc(local_times: pd.Series) -> pd.Series:              # naive shop-local times -> UTC, safe at DST changes
+    standard_time = np.zeros(len(local_times), dtype=bool)              # "ambiguous" wants one flag per row; False = standard time (CET)
+    return local_times.dt.tz_localize(SHOP_TIMEZONE, ambiguous=standard_time, nonexistent="shift_forward").dt.tz_convert("UTC")  # missing hour -> next valid time
+
+
 def add_synthetic_fields(source_clicks: pd.DataFrame, seed: int = DEFAULT_SEED) -> pd.DataFrame:  # enrich every click
     # ── Order clicks and set up the draws ─────────────────────
     clicks = source_clicks.sort_values(["visit_id", "click_number_in_visit"], kind="stable").reset_index(drop=True)  # visit order
@@ -39,6 +44,6 @@ def add_synthetic_fields(source_clicks: pd.DataFrame, seed: int = DEFAULT_SEED) 
     visit_text = clicks["visit_id"].astype("Int64").astype(str)         # integer text even if another row is missing its id
     click_number_text = clicks["click_number_in_visit"].astype("Int64").astype(str)  # same for click numbers
     clicks["click_id"] = "uci553-" + visit_text + "-" + click_number_text  # stable id, e.g. uci553-7-1
-    clicks["click_time_synthetic"] = local_series.dt.tz_localize(SHOP_TIMEZONE).dt.tz_convert("UTC")  # stored in UTC
+    clicks["click_time_synthetic"] = shop_time_to_utc(local_series)      # stored in UTC (DST-safe)
     clicks["device_type_synthetic"] = device_series                     # device labels
     return clicks                                                       # source columns + synthetic columns
