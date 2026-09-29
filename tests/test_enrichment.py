@@ -59,3 +59,12 @@ def test_shop_time_to_utc_handles_dst_edges():                          # T1-pre
     local = pd.Series(pd.to_datetime(["2008-03-30 02:30:00", "2008-10-26 02:30:00"]))  # a missing hour and an ambiguous hour in Warsaw
     utc = shop_time_to_utc(local)                                       # must not raise
     assert list(utc.dt.strftime("%Y-%m-%d %H:%M")) == ["2008-03-30 01:00", "2008-10-26 01:30"]  # shifted forward; ambiguous read as standard time (CET, UTC+1)
+
+
+def test_shop_time_to_utc_keeps_missing_times_missing():                # NaT mixed with real values stays NaT
+    from clickstream.enrichment import shop_time_to_utc                 # code under test
+    local = pd.Series(pd.to_datetime(["2008-04-01 10:00:00", None, "2008-03-30 02:30:00"]))  # a normal time, a missing time, a DST-gap time
+    utc = shop_time_to_utc(local)                                       # must not raise
+    assert utc.isna().tolist() == [False, True, False]                  # only the missing row is NaT
+    assert utc.iloc[0] == pd.Timestamp("2008-04-01 08:00:00", tz="UTC")  # April is summer time (UTC+2)
+    assert utc.iloc[2] == pd.Timestamp("2008-03-30 01:00:00", tz="UTC")  # the gap shifts forward to 03:00 local = 01:00 UTC

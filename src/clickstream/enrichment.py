@@ -44,6 +44,6 @@ def add_synthetic_fields(source_clicks: pd.DataFrame, seed: int = DEFAULT_SEED) 
     visit_text = clicks["visit_id"].astype("Int64").astype(str)         # integer text even if another row is missing its id
     click_number_text = clicks["click_number_in_visit"].astype("Int64").astype(str)  # same for click numbers
     clicks["click_id"] = "uci553-" + visit_text + "-" + click_number_text  # stable id, e.g. uci553-7-1
-    clicks["click_time_synthetic"] = shop_time_to_utc(local_series)      # stored in UTC (DST-safe)
+    clicks["click_time_synthetic"] = shop_time_to_utc(local_series)   # stored in UTC (DST-safe)
     clicks["device_type_synthetic"] = device_series                     # device labels
     return clicks                                                       # source columns + synthetic columns
