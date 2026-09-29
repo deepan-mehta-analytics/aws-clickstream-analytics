@@ -31,7 +31,7 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 See `git log` on `main` (hashes are not repeated here). Latest milestone: T1a Task 12 (public docs and ADR-0005 before the first deploy), 2026-09-29; the last CI-verified count is 136 passed for Task 11, and the new count is confirmed after the push.
 
 ## Metrics
-From a **local run (tier T0)** on the full UCI file, 2026-09-25: 165,474 source clicks, 0 rejected, 165,474 Silver clicks, 24,026 visits, 5,042 one-click visits, 1 reported category mismatch (A18); browse-depth funnel 24,026 / 14,504 / 9,125 / 4,779 / 1,631. As of 2026-09-29, 137 tests are expected to pass on Linux CI (133 pass on Windows, where 4 lake-storage tests are skipped; the Linux figure is confirmed after the push); the full-file pandas-vs-Spark check matches on all 165,474 clicks. No AWS metric exists yet; none is reported until measured from a real cloud run.
+From a **local run (tier T0)** on the full UCI file, 2026-09-25: 165,474 source clicks, 0 rejected, 165,474 Silver clicks, 24,026 visits, 5,042 one-click visits, 1 reported category mismatch (A18); browse-depth funnel 24,026 / 14,504 / 9,125 / 4,779 / 1,631. As of 2026-09-29, 137 tests pass on Linux CI (run 36533724060, 114.7 s; 133 on Windows, where 4 lake-storage tests are skipped); the full-file pandas-vs-Spark check matches on all 165,474 clicks. No AWS metric exists yet; none is reported until measured from a real cloud run.
 
 ## Known gaps
 See `docs/GAPS.md` — the brief-versus-reality register and the exam-coverage

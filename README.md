@@ -379,7 +379,7 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | Run | What it did | Duration |
 |---|---|---|
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
-| Full test suite on GitHub Actions | 108–136 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
+| Full test suite on GitHub Actions | 108–137 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
 💰 **Cloud cost (estimate, not measured):** about ₹110 one-time for the full
 hybrid build if the Redshift Serverless trial applies, and ₹0/month after
