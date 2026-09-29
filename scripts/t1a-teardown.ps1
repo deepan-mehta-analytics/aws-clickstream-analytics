@@ -31,6 +31,12 @@ function Get-DeleteBatch($Listing) {                                    # up to 
     return @($items | Select-Object -First 1000)                        # delete-objects accepts at most 1000 keys per call
 }
 
+function Get-DeleteFailures($Output) {                                  # per-key failures from delete-objects output (Quiet prints nothing on full success)
+    $text = ($Output | Out-String)                                      # $null or empty output becomes an empty string
+    if ([string]::IsNullOrWhiteSpace($text)) { return @() }             # nothing printed means no failures
+    return @(($text | ConvertFrom-Json).Errors | Where-Object { $_ })   # the Errors list, empty when absent
+}
+
 # ── Section 2: empty the buckets, then delete the stack ───────
 function Clear-Bucket([string]$Bucket) {                                # delete every object version and delete marker
     while ($true) {                                                     # repeat until nothing is left
@@ -39,7 +45,7 @@ function Clear-Bucket([string]$Bucket) {                                # delete
         if ($items.Count -eq 0) { break }                               # bucket is empty: stop
         @{ Objects = $items; Quiet = $true } | ConvertTo-Json -Depth 10 | Set-Content "$env:TEMP/delete.json"  # batch delete request
         $result = aws s3api delete-objects --bucket $Bucket --delete "file://$env:TEMP/delete.json" --output json  # remove this batch (Quiet: only failures are listed)
-        $failed = @(($result | ConvertFrom-Json).Errors | Where-Object { $_ })  # per-key failures that the exit code does not reveal
+        $failed = @(Get-DeleteFailures $result)                         # per-key failures that the exit code does not reveal
         if ($failed.Count -gt 0) { throw "delete-objects could not remove $($failed.Count) keys from $Bucket, first: $($failed[0].Key) ($($failed[0].Code): $($failed[0].Message))" }  # stop instead of retrying forever
     }
 }
