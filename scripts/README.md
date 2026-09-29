@@ -15,6 +15,9 @@ guardrails) — they are handed to the account owner to run via `!<command>`.
 Raw window output (Lambda payloads, Glue run details, unmasked Athena
 JSON, quality reports) is written only to `%TEMP%/t1a-window-<date>/` and
 never enters the repo. `t1a-window.ps1` masks every file with
-`t1a_evidence.py mask` before writing anything under `evidence/`, so only
-account-ID-free, ARN-free, bucket-name-free files ever reach git — see
-`evidence/README.md`.
+`t1a_evidence.py mask` before writing `window.json` and the Athena results
+under `evidence/`, so those files carry no account IDs, ARNs, email
+addresses or generated bucket names. `expected.json` and `comparison.json`
+are copied or written unmasked because they hold only month labels and
+counts — see `evidence/README.md`. The window script clears the previous
+same-day scratch folder at the start of each run.

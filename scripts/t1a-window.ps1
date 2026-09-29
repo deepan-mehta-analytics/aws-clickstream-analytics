@@ -1,4 +1,6 @@
 # ── T1a proof window: ingest, Glue runs, Athena validation, masked evidence (owner-run, after `aws login`) ──
+# The scripts rely on $PSNativeCommandUseErrorActionPreference (PowerShell 7.3 and later); refuse to run on older versions.
+#Requires -Version 7.3
 
 # ── Section 1: options, safety, folders ────────────────────────
 param(                                                                   # options
@@ -8,14 +10,17 @@ param(                                                                   # optio
 )
 $ErrorActionPreference = "Stop"                                         # stop on the first error
 $PSNativeCommandUseErrorActionPreference = $true                        # a failing aws/python call stops the script too
-$day = Get-Date -Format yyyy-MM-dd                                      # today's date, used for both folders
+$day = Get-Date -Format yyyy-MM-dd                                      # today's date, names the evidence folder
 $work = Join-Path $env:TEMP "t1a-window-$day"                           # raw output never goes into the repo
+if (Test-Path $work) { Remove-Item -Recurse -Force $work }              # a same-day rerun must never see the earlier run's Athena files
 $evidence = "evidence/t1a/$day"                                         # masked evidence, safe to commit
 New-Item -ItemType Directory -Force -Path $work | Out-Null              # scratch folder
 New-Item -ItemType Directory -Force -Path "$work/athena" | Out-Null     # raw Athena JSON results
 New-Item -ItemType Directory -Force -Path "$work/reports" | Out-Null    # raw Glue quality reports
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null          # masked evidence folder
 New-Item -ItemType Directory -Force -Path "$evidence/athena" | Out-Null # masked Athena results
+Get-ChildItem "$evidence/athena/*.json" -ErrorAction SilentlyContinue | Remove-Item -Force  # drop masked results left by an earlier same-day run
+if (Test-Path "$evidence/comparison.json") { Remove-Item -Force "$evidence/comparison.json" }  # and its stale comparison
 
 # ── Section 2: read the stack outputs ──────────────────────────
 function Get-StackOutputs {                                             # stack outputs as a hashtable
@@ -102,30 +107,44 @@ try {
     if ($record.quality_reports.Count -ne 2) {                          # exactly one report per Glue run
         throw "expected 2 quality reports in $($out.SilverBucketName)/_reports/, found $($record.quality_reports.Count)"  # something did not land
     }
-    $firstMonths = @($record.quality_reports[0].source_months)          # months the first (bulk) run processed
-    if ($firstMonths.Count -ne 4) {                                     # April-July
-        throw "first quality report should list 4 source months, found: $($firstMonths -join ',')"  # bookmark not honoured
+    $firstMonths = @($record.quality_reports[0].source_months | Sort-Object)  # months the first (bulk) run processed
+    if (($firstMonths -join ",") -ne "2008-04,2008-05,2008-06,2008-07") {  # exactly April-July, not just any four months
+        throw "first quality report source_months should be exactly 2008-04,2008-05,2008-06,2008-07, found: $($firstMonths -join ',')"  # bookmark not honoured
     }
     $secondMonths = @($record.quality_reports[1].source_months)         # months the second (bookmark) run processed
     if ($secondMonths.Count -ne 1 -or $secondMonths[0] -ne "2008-08") { # only the new month, nothing reprocessed
         throw "second quality report source_months should be exactly ['2008-08'], found: $($secondMonths -join ',')"  # this is the bookmark proof
     }
 
-    $record.athena = Get-ChildItem sql/validation/t1a/*.sql | Sort-Object Name | ForEach-Object { Invoke-AthenaFile $_.FullName }  # every validation query, in file order
+    $record.athena = @()                                                # filled one query at a time so a failure keeps what already ran
+    foreach ($sqlFile in (Get-ChildItem sql/validation/t1a/*.sql | Sort-Object Name)) {  # every validation query, in file order
+        $record.athena += Invoke-AthenaFile $sqlFile.FullName           # summary recorded as soon as the query finishes
+    }
 }
 catch {
     $record.failure = $_.Exception.Message                              # what went wrong, kept in the masked evidence
     throw                                                                # still fail the script, once the finally block below has run
 }
 finally {
+    $PSNativeCommandUseErrorActionPreference = $false                   # from here every exit code is read by hand so nothing masks the real failure
+    $finishProblems = @()                                               # problems found while saving evidence
     $record | ConvertTo-Json -Depth 20 | Set-Content "$work/window-raw.json"  # everything captured so far, even on failure
     & $Python scripts/t1a_evidence.py mask "$work/window-raw.json" "$evidence/window.json"  # masked copy, safe to commit
-    Get-ChildItem "$work/athena/*.json" | ForEach-Object {              # mask every Athena result that landed
+    if ($LASTEXITCODE -ne 0) { $finishProblems += "masking window-raw.json failed" }  # note it, keep going
+    Get-ChildItem "$work/athena/*.json" -ErrorAction SilentlyContinue | ForEach-Object {  # mask every Athena result that landed
         & $Python scripts/t1a_evidence.py mask $_.FullName "$evidence/athena/$($_.Name)"  # one masked file per query
+        if ($LASTEXITCODE -ne 0) { $finishProblems += "masking $($_.Name) failed" }  # note it, keep going
     }
+    $comparisonMismatch = $false                                        # set only when compare ran and reported a difference
     if (Test-Path "$work/expected.json") {                              # only possible once the first step ran
-        & $Python scripts/t1a_evidence.py compare --expected "$work/expected.json" --athena-dir "$work/athena" --output "$evidence/comparison.json"  # local vs Athena (exits 1 on any mismatch)
-        Copy-Item "$work/expected.json" "$evidence/expected.json" -Force  # keep the local numbers alongside the comparison
+        Copy-Item "$work/expected.json" "$evidence/expected.json" -Force  # keep the local numbers first, whatever happens next
+        if (@(Get-ChildItem "$work/athena/*.json" -ErrorAction SilentlyContinue).Count -gt 0) {  # nothing to compare when no query ran
+            & $Python scripts/t1a_evidence.py compare --expected "$work/expected.json" --athena-dir "$work/athena" --output "$evidence/comparison.json"  # local vs Athena (exits 1 on any mismatch)
+            if ($LASTEXITCODE -ne 0) { $comparisonMismatch = $true }    # remembered, thrown below only if nothing else failed
+        }
     }
+    $PSNativeCommandUseErrorActionPreference = $true                    # restore the strict setting
 }
+if ($finishProblems.Count -gt 0) { throw "evidence saving problems: $($finishProblems -join '; ')" }  # only reached when the main sequence succeeded
+if ($comparisonMismatch) { throw "Athena results do not match the local twin: see $evidence/comparison.json" }  # a real mismatch, reported only when no earlier step failed
 Write-Host "Window complete. Evidence in $evidence. Next: run scripts/t1a-teardown.ps1, then aws logout."  # only reached once nothing above threw

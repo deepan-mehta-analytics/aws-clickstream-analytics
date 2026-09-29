@@ -1,4 +1,6 @@
 # ── Upload the Glue script and library zip (owner-run, after `aws login`) ──
+# The scripts rely on $PSNativeCommandUseErrorActionPreference (PowerShell 7.3 and later); refuse to run on older versions.
+#Requires -Version 7.3
 param(                                                                   # options
     [Parameter(Mandatory)] [string]$ArtifactsBucket,                    # ArtifactsBucketName output of clickstream-foundation
     [string]$Region = "ap-south-1",                                     # Mumbai

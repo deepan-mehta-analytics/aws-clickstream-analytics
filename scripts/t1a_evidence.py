@@ -8,7 +8,8 @@ import sys                                                              # exit c
 from pathlib import Path                                                # file paths
 
 # ── Masking (public repo: no account IDs, ARNs or real bucket names) ─
-BUCKET = re.compile(r"clickstream-t1-lake-(bronze|silver|gold|athenaresults)bucket-[a-z0-9]+", re.IGNORECASE)  # CloudFormation-generated names
+BUCKET = re.compile(r"(?<![a-z0-9-])[a-z0-9][a-z0-9-]*?-(bronze|silver|gold|athenaresults)bucket-[a-z0-9]+", re.IGNORECASE)  # CloudFormation-generated names: <stack>-<role>bucket-<suffix>, any stack name
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")  # any email address
 ARN = re.compile(r"arn:aws[a-z-]*:[^\s\"']+")                           # any ARN
 ACCOUNT_ID = re.compile(r"(?<![0-9])[0-9]{12}(?![0-9])")                # 12-digit account id
 QUERY_FILES = {                                                         # comparison name -> saved Athena result file
@@ -22,6 +23,7 @@ QUERY_FILES = {                                                         # compar
 def mask_text(text: str) -> str:                                        # one string, masked
     text = BUCKET.sub(lambda match: f"<{match.group(1).lower().replace('athenaresults', 'athena-results')}-bucket>", text)  # keep the bucket's role
     text = ARN.sub("<arn>", text)                                       # hide ARNs
+    text = EMAIL.sub("<email>", text)                                   # hide email addresses
     return ACCOUNT_ID.sub("<account-id>", text)                         # hide account ids
 
 

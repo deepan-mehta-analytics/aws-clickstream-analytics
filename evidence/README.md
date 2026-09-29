@@ -16,18 +16,23 @@ One folder per window, named by the date it ran (`yyyy-MM-dd`):
 
 ## Masking
 
-Every file here has been through `scripts/t1a_evidence.py mask`, which
-removes anything that identifies the AWS account before it is written:
-AWS account IDs (12-digit numbers), full ARNs, and the CloudFormation-
-generated bucket names (replaced with a role-only placeholder such as
-`<bronze-bucket>`). Nothing under `evidence/` should ever need a second
-look before committing, but the masking regexes in `t1a_evidence.py` are
-the only thing enforcing that — they are not a substitute for reading a
-new file type before it is added here.
+`window.json` and `athena/*.json` have been through
+`scripts/t1a_evidence.py mask`, which removes anything that identifies the
+AWS account before they are written: AWS account IDs (12-digit numbers),
+full ARNs, email addresses, and the CloudFormation-generated bucket names
+(`<stack>-<role>bucket-<suffix>`, replaced with a role-only placeholder such
+as `<bronze-bucket>`).
+
+`expected.json` and `comparison.json` are not passed through the masker.
+They are written by `t1a_evidence.py` itself and hold only month labels and
+row counts, so they carry nothing account-specific. The masking regexes are
+the only thing enforcing the rest, so they are not a substitute for reading
+a new file type before it is added here.
 
 ## What is never here
 
 The source CSV (`data/e-shop clothing 2008.csv`) is never copied into
 `evidence/`; `.gitignore` ignores `*.csv` repo-wide. Raw, unmasked window
 output lives only in `%TEMP%/t1a-window-<date>/` on the machine that ran
-the window, and is discarded once the masked copy above exists.
+the window. It is not deleted automatically; the next same-day run clears it,
+and the owner can delete it by hand once the masked copy above exists.
