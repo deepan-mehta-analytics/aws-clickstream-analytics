@@ -110,6 +110,9 @@ Lambda generator → S3 → Glue job → Athena.
 | Athena | 100 queries × 10 MB minimum = 1 GB × $5/TB | $0.005 |
 | **Total per run** | | **≈ $0.15** |
 
+Running B every day for 30 days comes to about $4.50/month. Glue Flex
+($0.29) would cut the Glue line by about a third.
+
 ### B2. Tier T1a proof run, Mumbai (estimate)
 
 | Line item | Calculation | Estimate |
@@ -120,9 +123,6 @@ The annex prices T1 at 2 DPU for 10 minutes on Glue 6.0+; the Flex execution
 class and the 15-minute timeout in [ADR-0005](adr/0005-t1-batch-lake-design.md)
 are not separately priced here. The measured cost replaces this line after
 the first window.
-
-Running B every day for 30 days comes to about $4.50/month. Glue Flex
-($0.29) would cut the Glue line by about a third.
 
 ### C. BI layer (either path)
 

@@ -92,6 +92,9 @@ aws login --region ap-south-1
 aws cloudformation deploy --template-file infra/foundation/template.yaml --stack-name clickstream-foundation --region ap-south-1
 aws cloudformation describe-stacks --stack-name clickstream-foundation --region ap-south-1 --query "Stacks[0].Outputs"
 
+# 2b. Copy the ArtifactsBucketName value into your local, gitignored infra/samconfig.toml
+#     (start from infra/samconfig.example.toml); `sam deploy --config-env t1-lake` in step 4 reads it.
+
 # 3. Upload the Glue script and library zip to the artifacts bucket
 pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>
 
@@ -105,6 +108,7 @@ cd ..
 #    then execute that same change set from the console.
 
 # 6. Run the proof window: ingest, Glue twice (bookmark proof), Athena checks, masked evidence
+#    (uses the repo's .venv interpreter: its -Python parameter defaults to .venv/Scripts/python.exe, so the venv must exist first)
 pwsh scripts/t1a-window.ps1
 
 # 7. Tear down: empties the four buckets, deletes the stack, verifies it is gone

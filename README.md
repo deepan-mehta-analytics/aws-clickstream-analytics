@@ -294,6 +294,9 @@ a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
 1. Sign in for the window only: `aws login --region ap-south-1`.
 2. Deploy the foundation stack once (`aws cloudformation deploy` of
    `infra/foundation/template.yaml`) and note its `ArtifactsBucketName` output.
+   Copy that value into your local, gitignored `infra/samconfig.toml` (start
+   from `infra/samconfig.example.toml`); `sam deploy --config-env t1-lake`
+   reads it.
 3. Upload the Glue code: `pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>`.
 4. Build and create a change set only: `sam build`, then
    `sam deploy --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset`
