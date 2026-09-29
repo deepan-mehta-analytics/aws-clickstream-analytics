@@ -8,7 +8,7 @@ credentials; CI only lints and tests the templates.
 | Folder | Stack name | What it creates | Status |
 |---|---|---|---|
 | `foundation/` | `clickstream-foundation` | One S3 bucket for packaged code (SSE-S3, private, TLS only, 30-day expiry) | Written, not deployed |
-| `t1-lake/` | `clickstream-t1-lake` | Tier T1 (Lambda, Bronze/Silver/Gold buckets, Glue, Athena) | Not written yet |
+| `t1-lake/` | `clickstream-t1-lake` | Tier T1a (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job and catalog, Athena workgroup) | Written, not deployed |
 
 ## Checks (no AWS credentials)
 
@@ -76,3 +76,45 @@ than 30 days would need a fresh `sam build` + `sam deploy` before any rollback.
 
 Record every window (created, torn down, measured cost) in the teardown log
 in [`docs/cost-model.md`](../docs/cost-model.md).
+
+## Tier T1a window runbook (owner only)
+
+Run the commands in this order from the repository root, in PowerShell 7.3 or
+later. Values in angle brackets are placeholders; the real values come from
+your stack outputs and stay out of the repository. The scripts are described
+in [`scripts/README.md`](../scripts/README.md). Nothing here has been run yet.
+
+```powershell
+# 1. Sign in for this window only
+aws login --region ap-south-1
+
+# 2. Foundation stack (once); note the ArtifactsBucketName output
+aws cloudformation deploy --template-file infra/foundation/template.yaml --stack-name clickstream-foundation --region ap-south-1
+aws cloudformation describe-stacks --stack-name clickstream-foundation --region ap-south-1 --query "Stacks[0].Outputs"
+
+# 3. Upload the Glue script and library zip to the artifacts bucket
+pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>
+
+# 4. Build, then create a change set only (does not apply it)
+cd infra
+sam build --template-file t1-lake/template.yaml --build-dir .aws-sam/t1-lake
+sam deploy --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset
+cd ..
+
+# 5. Review the change set in the CloudFormation console (IAM resources first),
+#    then execute that same change set from the console.
+
+# 6. Run the proof window: ingest, Glue twice (bookmark proof), Athena checks, masked evidence
+pwsh scripts/t1a-window.ps1
+
+# 7. Tear down: empties the four buckets, deletes the stack, verifies it is gone
+pwsh scripts/t1a-teardown.ps1
+
+# 8. Remove the cached session, then log the window in docs/cost-model.md
+aws logout
+```
+
+If Glue 6.0 is not available in `ap-south-1`, redeploy with the template's
+`GlueVersion` parameter set to `5.1` (see
+[ADR-0005](../docs/adr/0005-t1-batch-lake-design.md)). Masked evidence lands in
+`evidence/t1a/<date>/`; check it for account IDs before committing.

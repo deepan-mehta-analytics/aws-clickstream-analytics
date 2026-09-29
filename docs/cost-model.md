@@ -110,6 +110,17 @@ Lambda generator → S3 → Glue job → Athena.
 | Athena | 100 queries × 10 MB minimum = 1 GB × $5/TB | $0.005 |
 | **Total per run** | | **≈ $0.15** |
 
+### B2. Tier T1a proof run, Mumbai (estimate)
+
+| Line item | Calculation | Estimate |
+|---|---|---|
+| T1a proof run (Lambda, S3, Glue 6.0 job on 2 workers, Athena) | From the tier ladder in the [ADR-0001 annex](adr/0001-hybrid-cost-tiers.md), Mumbai, INR incl. GST | about ₹12 per run (estimate, not measured) |
+
+The annex prices T1 at 2 DPU for 10 minutes on Glue 6.0+; the Flex execution
+class and the 15-minute timeout in [ADR-0005](adr/0005-t1-batch-lake-design.md)
+are not separately priced here. The measured cost replaces this line after
+the first window.
+
 Running B every day for 30 days comes to about $4.50/month. Glue Flex
 ($0.29) would cut the Glue line by about a third.
 
@@ -147,3 +158,4 @@ first cloud run.
 | Date | Resources created | Torn down / paused | Verified by | Measured cost |
 |---|---|---|---|---|
 | 2026-09-25 | None: tier T0 local twin ran on a laptop | Nothing to tear down | — | ₹0 AWS cost |
+| _pending_ | _T1a window (Task 13): fill in when run_ | | | |

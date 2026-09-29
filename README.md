@@ -33,7 +33,7 @@ nothing per month once it is published.
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![pytest](https://img.shields.io/badge/pytest-136_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
+[![pytest](https://img.shields.io/badge/pytest-137_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-T0_Verified_·_T1a_In_Development-yellow?style=for-the-badge)](PROJECT-STATUS.md)
 [![Exam coverage](https://img.shields.io/badge/DEA--C01-8%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
@@ -78,7 +78,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 
 - **Research first**: every claim in the original brief is re-verified and logged in [`docs/GAPS.md`](docs/GAPS.md) before adoption
 - **Measured results only**: no number is reported unless it came from a real run
-- **Decisions on record**: four ADRs and a cost-tier annex in [`docs/adr/`](docs/adr/)
+- **Decisions on record**: five ADRs (ADR-0005 is proposed) and a cost-tier annex in [`docs/adr/`](docs/adr/)
 - **Cost-disciplined and public-safe**: every tier priced in rupees first, torn down after use, placeholders for every account identifier
 
 ---
@@ -93,7 +93,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 | 🗄️ Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | 🦆 Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | 🕒 Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 Testing | pytest 9 | 136 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧪 Testing | pytest 9 | 137 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
 | 🧹 Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
 | ⚙️ CI | GitHub Actions | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | ☁️ Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
@@ -168,13 +168,15 @@ flowchart LR
 | Runner | `src/clickstream/local_run.py` | End-to-end local run writing Parquet and the report |
 | Spark stages | `src/clickstream_spark/` | Source, enrichment, Bronze, Silver, Gold, summaries, quality and lake storage in PySpark |
 | Ingest Lambda | `lambdas/ingest_source/handler.py` | Downloads, verifies and lands the UCI file in S3 Bronze by month |
-| Glue job | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks |
+| Glue job | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks; Glue 6.0, G.1X × 2 workers, Flex, 15-minute timeout, monthly dynamic partition overwrite |
+| Glue Catalog + projection | `infra/t1-lake/template.yaml` | 13 tables defined in the template; Athena partition projection means no crawler and no repair step |
+| Athena workgroup | `infra/t1-lake/template.yaml` | Enforced settings, SSE-S3 results that expire after 1 day, 1 GB scan cutoff per query |
 
 | Tier | Scope | Status |
 |---|---|---|
-| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0004 accepted; a few gaps open |
+| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0004 accepted, ADR-0005 proposed; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
-| T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally (11 of 14 plan tasks); not deployed |
+| T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally, with public docs and ADR-0005 written (12 of 14 plan tasks); not deployed |
 | T1b–T1d | Iceberg Silver, ingest extras, evidence pass | ⏳ |
 | T2 | Orchestration, data-quality alerts, monitoring | ⏳ |
 | T3 + T4 | Streaming window + Redshift Serverless window | ⏳ |
@@ -185,6 +187,7 @@ Design decisions are recorded as ADRs:
 - [ADR-0002: Streamlit dashboard](docs/adr/0002-dashboard-streamlit.md)
 - [ADR-0003: data model](docs/adr/0003-data-model.md)
 - [ADR-0004: infrastructure as code (SAM + CloudFormation) and security baseline](docs/adr/0004-iac-sam-cloudformation.md)
+- [ADR-0005: T1a batch lake design (Spark on Glue, one bucket per layer, projection tables)](docs/adr/0005-t1-batch-lake-design.md), status Proposed
 
 ---
 
@@ -219,10 +222,10 @@ aws-clickstream-analytics/
 ├── infra/foundation/template.yaml   ← artifacts-bucket stack (owner-deployed only)
 ├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup (not deployed)
 │
-├── tests/                           ← 136 pytest tests (see tests/README.md)
+├── tests/                           ← 137 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
-│   ├── adr/                         ← ADRs 0001–0004 + cost-tier annex
+│   ├── adr/                         ← ADRs 0001–0005 (0005 proposed) + cost-tier annex
 │   ├── data-dictionary.md           ← every table and column in plain words
 │   ├── cost-model.md                ← verified AWS prices and teardown log
 │   ├── exam-guide-map.md            ← DEA-C01 skills-coverage matrix (120 skills)
@@ -232,7 +235,7 @@ aws-clickstream-analytics/
 │
 ├── dashboards/                      ← dashboard tier (T5), README only for now
 ├── .github/workflows/ci.yml         ← hygiene, lint (ruff + cfn-lint), tests
-├── Makefile                         ← working local targets; cloud targets say "owner-run only"
+├── Makefile                         ← working local targets; cloud and T1a owner targets say "owner-run only"
 ├── pyproject.toml                   ← package and pinned dependencies
 ├── .env.example                     ← placeholder configuration
 ├── PROJECT-STATUS.md                ← phase-by-phase status
@@ -282,20 +285,47 @@ local-only files tracked) and a **test** job (Python 3.11, Java 17, ruff,
 cfn-lint, pytest). It downloads the dataset and checks its MD5 first, so the
 full-file and pandas-vs-Spark tests run for real there.
 
+### ☁️ Option 4: Tier T1a on AWS (owner only, not run yet)
+
+Only the account owner runs these steps; no agent or CI job holds AWS
+credentials. Nothing below has been run, and every value in angle brackets is
+a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
+
+1. Sign in for the window only: `aws login --region ap-south-1`.
+2. Deploy the foundation stack once (`aws cloudformation deploy` of
+   `infra/foundation/template.yaml`) and note its `ArtifactsBucketName` output.
+3. Upload the Glue code: `pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>`.
+4. Build and create a change set only: `sam build`, then
+   `sam deploy --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset`
+   (run inside `infra/`).
+5. Review the change set in the CloudFormation console, IAM resources first,
+   then execute that change set from the console.
+6. Run the proof window: `pwsh scripts/t1a-window.ps1`. It ingests April to
+   July, runs Glue, ingests August alone to prove the bookmark, runs Glue
+   again, runs the five Athena validation queries and saves masked evidence.
+7. Tear down: `pwsh scripts/t1a-teardown.ps1`. It empties the buckets,
+   deletes the stack and verifies it is gone.
+8. Sign out: `aws logout`, and record the window in the teardown log in
+   [`docs/cost-model.md`](docs/cost-model.md).
+
 ---
 
 ## 🧪 Tests
 
 ```bash
-.venv/Scripts/python -m ruff check src tests
-.venv/Scripts/python -m pytest -v        # → 136 passed on Linux CI (132 run, 4 skipped on Windows)
+.venv/Scripts/python -m ruff check src tests lambdas scripts glue
+.venv/Scripts/python -m pytest -v        # → 137 passed on Linux CI (133 run, 4 skipped on Windows)
 .venv/Scripts/cfn-lint
 ```
+
+The Spark tests need a JDK (Java 17 or 21); point `SPARK_JAVA_HOME` at it, or
+they are skipped with a reason. The 4 lake-storage tests are skipped on
+Windows and run on Linux CI.
 
 | File | What it covers |
 |---|---|
 | `test_source_file.py`, `test_codebook.py` | Reader, plain column names, codebook sizes and labels |
-| `test_enrichment.py` | Repeatable seeded enrichment, including a 195-click visit near midnight |
+| `test_enrichment.py` | Repeatable seeded enrichment, including a 195-click visit near midnight and DST-safe time conversion (missing and ambiguous local times) |
 | `test_bronze.py` | Arrival columns and simulated resends |
 | `test_silver.py` | Every Silver quality rule, plus out-of-order and empty input |
 | `test_gold.py` | Gold metrics, including the real A18 category anomaly |
@@ -351,6 +381,8 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 💰 **Cloud cost (estimate, not measured):** about ₹110 one-time for the full
 hybrid build if the Redshift Serverless trial applies, and ₹0/month after
 teardown. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
+Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
+annex, not measured).
 
 ---
 
@@ -375,6 +407,9 @@ without a real run behind it.
 - **No AWS resources exist yet**: the cloud tiers are designed and priced; the T1a Lambda and Glue code is tested locally only, never run on AWS
 - **Infrastructure as code is written but not deployed**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The foundation (artifacts bucket) and T1a lake templates exist and pass cfn-lint and guardrail tests; neither has been deployed
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
+- **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
+- **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
+- **T1a has not run on AWS yet**: Glue 6.0 in Mumbai is inferred from a price-list entry, and the Glue role's permission set and minimum worker count are unverified until the first window ([`docs/GAPS.md`](docs/GAPS.md))
 - **Single runs only**: runtimes above are one run each, not averages
 
 ---
@@ -382,7 +417,7 @@ without a real run behind it.
 ## 🔜 Roadmap
 
 - [x] T0: local twin (Bronze → Silver → Gold → summaries, verified on the full file)
-- [ ] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena): code, SAM stack and owner tooling built and tested locally, 11 of 14 plan tasks done
+- [ ] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena): code, SAM stack and owner tooling built and tested locally, 12 of 14 plan tasks done
 - [ ] T1b–T1d: Iceberg Silver, ingest extras, evidence pass
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window
