@@ -291,6 +291,9 @@ Only the account owner runs these steps; no agent or CI job holds AWS
 credentials. Nothing below has been run, and every value in angle brackets is
 a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
 
+0. Pre-flight checklist in [`infra/README.md`](infra/README.md): an AWS
+   Budgets alert exists, the console is on Mumbai, and no unmasked
+   screenshots go into the repo. Do not start until it is all ticked.
 1. Sign in for the window only: `aws login --region ap-south-1`.
 2. Deploy the foundation stack once (`aws cloudformation deploy` of
    `infra/foundation/template.yaml`) and note its `ArtifactsBucketName` output.

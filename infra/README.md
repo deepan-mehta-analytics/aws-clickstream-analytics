@@ -84,6 +84,19 @@ later. Values in angle brackets are placeholders; the real values come from
 your stack outputs and stay out of the repository. The scripts are described
 in [`scripts/README.md`](../scripts/README.md). Nothing here has been run yet.
 
+**Pre-flight: do not start the window until every box is ticked.**
+
+- [ ] An **AWS Budgets alert exists** (Billing and Cost Management → Budgets;
+      the *Zero spend budget* template, or a monthly cost budget of about $1,
+      emailing you). Billing pages show the Region as "Global", which is
+      expected. Budgets data is not real-time and cannot see Redshift trial
+      usage, so it is a backstop, not a live meter.
+- [ ] The console's Region selector is on **Asia Pacific (Mumbai)
+      `ap-south-1`** for every service page you open during the window.
+- [ ] No screenshot or copied output that shows the account ID, ARNs or your
+      sign-in name will be saved inside the repository; evidence goes through
+      the masking script only.
+
 ```powershell
 # 1. Sign in for this window only
 aws login --region ap-south-1
