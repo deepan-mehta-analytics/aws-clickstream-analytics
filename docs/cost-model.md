@@ -158,6 +158,9 @@ Priced from the AWS Price List API for `ap-south-1` (publication dates
 
 ### E. T4 Redshift window, sized by trial eligibility (decision 2026-10-05)
 
+**Eligible (confirmed 2026-10-05, GAPS G-05): the first row applies.** The
+credit also covers Serverless storage and snapshots, per the console docs.
+
 | If | T4 plan | Out of pocket |
 |---|---|---|
 | The console shows the Serverless free-trial banner | Up to 3 active hours on the $300 credit, activated only when T4 starts | ≈ ₹0 compute (storage on the credit or a few rupees) |

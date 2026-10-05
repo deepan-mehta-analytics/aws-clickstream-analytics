@@ -81,7 +81,8 @@ the console offers the trial, otherwise one scripted hour (≈ ₹194). 18
 formerly not-planned skills were added as small add-ons to T1c, T1d, T2, T3
 and T4, about ₹170 in total (≈ ₹350 with reruns); see `docs/cost-model.md`
 §3 D–E. New one-time totals with a local dashboard: about ₹460 with the
-trial, about ₹650 without it.
+trial, about ₹650 without it. The trial was confirmed available the same day
+(GAPS G-05), so about ₹460 applies.
 
 1. Best case: the Redshift Serverless $300 / 90-day trial applies, and the
    dashboard runs locally.

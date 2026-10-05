@@ -382,10 +382,10 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | Full test suite on GitHub Actions | 108–137 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
 💰 **Cloud cost (estimate, not measured):** about ₹460 one-time for the full
-hybrid build with a local dashboard if the Redshift Serverless trial applies,
-or about ₹650 without it (one paid Redshift hour), and ₹0/month after
-teardown. No free credits are available (confirmed 2026-10-05), so the rest is
-out of pocket at list price. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
+hybrid build with a local dashboard, and ₹0/month after teardown. The
+Redshift window runs on the Redshift Serverless $300 trial credit (confirmed
+available 2026-10-05); there are no other credits, so the rest is out of
+pocket at list price. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
 annex, not measured).
 
