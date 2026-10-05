@@ -185,6 +185,10 @@ credit also covers Serverless storage and snapshots, per the console docs.
 An AWS Budgets alert (about $1, set by the account owner) must exist before
 any resource is created. It does not cover Redshift trial usage.
 
+**In place since 2026-10-05 (set by the owner):** a $1 zero-spend budget and
+a $10 monthly cost budget, both with email recipients verified (Active), plus
+an AWS Cost Anomaly Detection monitor. No alert has fired; spend is $0.00.
+
 ---
 
 ## 5. Teardown log
