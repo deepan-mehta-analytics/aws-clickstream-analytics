@@ -206,4 +206,5 @@ first cloud run.
 | Date | Resources created | Torn down / paused | Verified by | Measured cost |
 |---|---|---|---|---|
 | 2026-09-25 | None: tier T0 local twin ran on a laptop | Nothing to tear down | — | ₹0 AWS cost |
-| _pending_ | _T1a window (Task 13): fill in when run_ | | | |
+| 2026-10-05 | `clickstream-foundation` (artifacts bucket, ~35 KB of code); two attempts at `clickstream-t1-lake`, both failed during creation (Lambda concurrency quota of 10; Glue disabled for the account, GAPS G-18, G-19) | Both T1a attempts rolled back automatically and the stacks were deleted; the foundation bucket stays (objects expire after 30 days); `aws logout` | `aws cloudformation wait stack-delete-complete` returned with no error after each delete | _pending: read in Cost Explorer after 1–2 days_ |
+| _pending_ | _T1a window (Task 13), rerun once AWS Support enables Glue_ | | | |
