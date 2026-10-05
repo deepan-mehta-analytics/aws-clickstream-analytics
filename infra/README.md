@@ -61,7 +61,7 @@ aws cloudformation delete-stack --stack-name clickstream-foundation --region ap-
 ```bash
 cd infra
 sam build --template-file <tier>/template.yaml --build-dir .aws-sam/<tier>   # one build folder per tier (gitignored)
-sam deploy --config-env <tier> --template-file .aws-sam/<tier>/template.yaml --no-execute-changeset  # create a change set only
+sam deploy --config-file (Resolve-Path samconfig.toml).Path --config-env <tier> --template-file .aws-sam/<tier>/template.yaml --no-execute-changeset  # change set only; SAM looks for samconfig.toml beside the built template, so pass its full path
 # review the change set in the CloudFormation console: IAM resources first
 # then execute THAT change set from the console; rerunning sam deploy would create a new, unreviewed one
 sam delete --stack-name clickstream-<tier> --region ap-south-1     # teardown at the end of the window
@@ -121,7 +121,8 @@ pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>
 # 4. Build, then create a change set only (does not apply it)
 cd infra
 sam build --template-file t1-lake/template.yaml --build-dir .aws-sam/t1-lake
-sam deploy --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset
+sam deploy --config-file (Resolve-Path samconfig.toml).Path --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset
+# (without --config-file, SAM looks beside the built template and stops with "Missing option '--stack-name'")
 cd ..
 
 # 5. Review the change set in the CloudFormation console (IAM resources first),

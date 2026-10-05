@@ -302,7 +302,8 @@ a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
    reads it.
 3. Upload the Glue code: `pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>`.
 4. Build and create a change set only: `sam build`, then
-   `sam deploy --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset`
+   `sam deploy --config-file (Resolve-Path samconfig.toml).Path --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset`
+   (the full config path is needed: SAM otherwise looks for `samconfig.toml` beside the built template)
    (run inside `infra/`).
 5. Review the change set in the CloudFormation console, IAM resources first,
    then execute that change set from the console.
