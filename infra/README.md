@@ -89,7 +89,14 @@ in [`scripts/README.md`](../scripts/README.md). Nothing here has been run yet.
 - [ ] An **AWS Budgets alert exists** (Billing and Cost Management → Budgets;
       the *Zero spend budget* template, or a monthly cost budget of about $1,
       emailing you). Billing pages show the Region as "Global", which is
-      expected. Budgets data is not real-time and cannot see Redshift trial
+      expected.
+- [ ] Each budget's email recipient shows **Active** on the budget's detail
+      page. AWS Budgets now sends nothing to an unverified address: confirm
+      the link in the email from an `@aws.com` sender while signed in to this
+      account (links expire after 12 hours; use *Resend verification* or
+      *Send Notification* if the status is Pending, Expiring or Inactive).
+      Source: [Budgets email recipients](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-email-recipients.html),
+      fetched 2026-10-05. Budgets data is not real-time and cannot see Redshift trial
       usage, so it is a backstop, not a live meter.
 - [ ] The console's Region selector is on **Asia Pacific (Mumbai)
       `ap-south-1`** for every service page you open during the window.
