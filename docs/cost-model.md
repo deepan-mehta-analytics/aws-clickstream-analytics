@@ -5,7 +5,9 @@ pricing pages. **Every figure is an estimate until a real run's bill replaces
 it.** No number here is a measured cost.
 
 - **Account:** legacy AWS Free Tier (pre-2025 account, confirmed by AWS
-  support 2026-09-24). No new-plan credits. The 12-month offers have likely
+  support 2026-09-24). No new-plan credits. **No free credits of any kind
+  (owner-confirmed 2026-10-05, GAPS G-11), so every figure below is out of
+  pocket at list price.** The 12-month offers have likely
   lapsed. See `GAPS.md` G-01.
 - **Region priced here:** US East (N. Virginia), `us-east-1`, as a baseline.
   The chosen region is **Mumbai, `ap-south-1`** (ADR-0001, Accepted

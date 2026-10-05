@@ -78,7 +78,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 
 - **Research first**: every claim in the original brief is re-verified and logged in [`docs/GAPS.md`](docs/GAPS.md) before adoption
 - **Measured results only**: no number is reported unless it came from a real run
-- **Decisions on record**: five ADRs (ADR-0005 is proposed) and a cost-tier annex in [`docs/adr/`](docs/adr/)
+- **Decisions on record**: five accepted ADRs and a cost-tier annex in [`docs/adr/`](docs/adr/)
 - **Cost-disciplined and public-safe**: every tier priced in rupees first, torn down after use, placeholders for every account identifier
 
 ---
@@ -174,7 +174,7 @@ flowchart LR
 
 | Tier | Scope | Status |
 |---|---|---|
-| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0004 accepted, ADR-0005 proposed; a few gaps open |
+| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0005 accepted; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
 | T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally, with public docs and ADR-0005 written (12 of 14 plan tasks); not deployed |
 | T1b–T1d | Iceberg Silver, ingest extras, evidence pass | ⏳ |
@@ -187,7 +187,7 @@ Design decisions are recorded as ADRs:
 - [ADR-0002: Streamlit dashboard](docs/adr/0002-dashboard-streamlit.md)
 - [ADR-0003: data model](docs/adr/0003-data-model.md)
 - [ADR-0004: infrastructure as code (SAM + CloudFormation) and security baseline](docs/adr/0004-iac-sam-cloudformation.md)
-- [ADR-0005: T1a batch lake design (Spark on Glue, one bucket per layer, projection tables)](docs/adr/0005-t1-batch-lake-design.md), status Proposed
+- [ADR-0005: T1a batch lake design (Spark on Glue, one bucket per layer, projection tables)](docs/adr/0005-t1-batch-lake-design.md), status Accepted
 
 ---
 
@@ -225,7 +225,7 @@ aws-clickstream-analytics/
 ├── tests/                           ← 137 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
-│   ├── adr/                         ← ADRs 0001–0005 (0005 proposed) + cost-tier annex
+│   ├── adr/                         ← ADRs 0001–0005 (all accepted) + cost-tier annex
 │   ├── data-dictionary.md           ← every table and column in plain words
 │   ├── cost-model.md                ← verified AWS prices and teardown log
 │   ├── exam-guide-map.md            ← DEA-C01 skills-coverage matrix (120 skills)
@@ -381,9 +381,10 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
 | Full test suite on GitHub Actions | 108–137 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
-💰 **Cloud cost (estimate, not measured):** about ₹110 one-time for the full
-hybrid build if the Redshift Serverless trial applies, and ₹0/month after
-teardown. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
+💰 **Cloud cost (estimate, not measured):** about ₹690 one-time for the full
+hybrid build with a local dashboard, and ₹0/month after teardown. No free
+credits are available (confirmed 2026-10-05), so this is out of pocket at list
+price; about ₹300 if the Redshift work fits one scripted hour. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
 annex, not measured).
 

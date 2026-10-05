@@ -1,6 +1,6 @@
 # ADR-0005: Tier T1a batch lake design (Spark on Glue, one bucket per layer, projection tables)
 
-- **Status:** Proposed (2026-09-29; the project owner flips this to Accepted)
+- **Status:** Accepted (2026-10-05, by the project owner; proposed 2026-09-29)
 - **Deciders:** project owner
 - **Related:** [ADR-0001](0001-ingest-and-warehouse-stack.md) (hybrid stack,
   Mumbai); [ADR-0001 cost tiers](0001-hybrid-cost-tiers.md) (T1 about ₹12 a
