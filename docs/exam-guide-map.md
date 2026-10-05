@@ -9,17 +9,21 @@ wording below is **paraphrased**; the official guide is the authority.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
 **Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 15 designed · 97 not started**
-(as of 2026-09-26; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
+(as of 2026-10-05; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
 
-**Plan: 86 planned · 8 stretch · 26 not planned.** Planned skills by
-domain: D1 31/37, D2 16/26, D3 24/28, D4 15/29. On 2026-09-26, 26 stretch
+**Plan: 104 planned · 8 stretch · 8 not planned.** Planned skills by
+domain: D1 37/37, D2 20/26, D3 27/28, D4 20/29. On 2026-09-26, 26 stretch
 skills were promoted to planned as low-cost add-ons to tiers T1–T4 (each row
 names its tier); the costs of Glue Data Quality, Lake Formation, CloudTrail,
-Logs Insights and Parameter Store are to be verified before T2 is built.
-Security and governance (D4) is still the thinnest area, because several of
-its skills need AWS Organizations, multiple accounts or paid services outside
-this project's scope. Ten skills (9 planned, 1 stretch) depend on the
-streaming and Redshift window in ADR-0001, and would be lost with a
+Logs Insights and Parameter Store are to be verified before T2 is built. On
+2026-10-05, with no free credits available, 18 of the 26 not-planned skills
+were promoted after pricing each one in Mumbai from the AWS Price List API
+(about ₹170 in total, estimates, not measured); each row names its tier and
+estimate, and each one adds a line to that tier's teardown. The 8 left are
+accepted limitations (see `GAPS.md` §3): unpriced SageMaker services, a
+Transfer Family leak risk, a schema-conversion source database, and two
+skills that need AWS Organizations. Twelve skills (11 planned, 1 stretch)
+depend on the streaming and Redshift windows in ADR-0001, and would be lost with a
 batch-only design.
 
 Status legend:
@@ -49,7 +53,7 @@ Accepted 2026-09-25):
 | 1.1.5 | Schedule jobs and crawlers | Planned | EventBridge schedule for the batch job | ⬜ |
 | 1.1.6 | Trigger on events | Planned | S3 event notification → Lambda | ⬜ |
 | 1.1.7 | Invoke Lambda from Kinesis | Planned | T3: Lambda consumer on the Kinesis stream (event source mapping) | ⬜ |
-| 1.1.8 | IP allowlists for data-source access | Not planned | No private data sources | ⬜ |
+| 1.1.8 | IP allowlists for data-source access | Planned | T1c: S3 bucket policy with an `aws:SourceIp` allowlist on a demo bucket (shows why AWS-service callers such as Glue fall outside it). Est. ₹0 | ⬜ |
 | 1.1.9 | Handle throttling and rate limits | Planned | T1: producer retries with exponential backoff on throttling, tested locally first | ⬜ |
 | 1.1.10 | Fan-in / fan-out for streams | Planned | T3: two standard consumers on one stream (Firehose + Lambda); enhanced fan-out explained, not bought | ⬜ |
 | 1.1.11 | Replayable ingestion | Planned | Immutable raw Bronze in S3 plus stream retention | ⬜ |
@@ -59,16 +63,16 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 1.2.1 | Tune container workloads | Not planned | No containers in the design | ⬜ |
+| 1.2.1 | Tune container workloads | Planned | T1c: a small Lambda packaged as a container image (partial: no ECS/EKS tuning). Est. < ₹10, ECR storage price to verify | ⬜ |
 | 1.2.2 | Connect via JDBC/ODBC | Planned | T4: JDBC connection from a local SQL client to Redshift Serverless | ⬜ |
 | 1.2.3 | Integrate multiple sources | Planned | T1: clickstream joined with the public-API reference data (1.1.4) in Gold | ⬜ |
 | 1.2.4 | Keep processing costs down | Planned | [`cost-model.md`](cost-model.md), ADR-0001 | 🟡 |
 | 1.2.5 | Pick transformation services to fit requirements | Planned | Glue, Lambda, Redshift SQL | ⬜ |
 | 1.2.6 | Convert between formats | Planned | CSV → Parquet at every layer: `src/clickstream/local_run.py` (local run, tier T0); Firehose JSON → Parquet still to come | ✅ |
 | 1.2.7 | Debug transformation failures and slowness | Planned | Runbook entries from real failures | ⬜ |
-| 1.2.8 | Expose data to other systems as APIs | Not planned | — | ⬜ |
+| 1.2.8 | Expose data to other systems as APIs | Planned | T2: HTTP API (API Gateway + Lambda) serving one Athena summary; the workgroup's 1 GB scan cutoff caps abuse. Est. ₹0 | ⬜ |
 | 1.2.9 | Characterise data volume, velocity and variety | Planned | Measured profile in [`data/README.md`](../data/README.md); [data dictionary](data-dictionary.md) | 🟡 |
-| 1.2.10 | Use LLMs in data processing | Not planned | — | ⬜ |
+| 1.2.10 | Use LLMs in data processing | Planned | T1c: an LLM (Amazon Bedrock) labels the 217 product codes; model availability in Mumbai to verify. Est. < ₹5 | ⬜ |
 
 ### Task 1.3: Orchestrate pipelines
 
@@ -89,11 +93,11 @@ Accepted 2026-09-25):
 | 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
 | 1.4.5 | Deploy with IaC | Planned | One SAM-extended CloudFormation stack per tier, owner-deployed via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 1.4.6 | Package serverless pipelines with SAM | Planned | `sam build` / `sam deploy` of the tier templates; `sam local invoke` of the ingest Lambda ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
-| 1.4.7 | Mount storage in Lambda | Not planned | — | ⬜ |
+| 1.4.7 | Mount storage in Lambda | Planned | T1c: a separate small Lambda in a VPC mounts EFS (S3 gateway endpoint, no NAT gateway). Est. ≈ ₹2 | ⬜ |
 | 1.4.8 | Repeatable deploys with CloudFormation/CDK | Planned | CloudFormation stacks (SAM transform), deployed and deleted per working window ([ADR-0004](adr/0004-iac-sam-cloudformation.md)); CDK rejected | 🟡 |
 | 1.4.9 | CI/CD for data pipelines | Planned | GitHub Actions | ⬜ |
 | 1.4.10 | Distributed computing concepts | Planned | Spark in Glue, with a concept note | ⬜ |
-| 1.4.11 | Data structures and algorithms | Not planned | — | ⬜ |
+| 1.4.11 | Data structures and algorithms | Planned | T1d: concept note linking the code that uses hash-based dedup, sorting and window functions. ₹0 | ⬜ |
 
 ---
 
@@ -105,12 +109,12 @@ Accepted 2026-09-25):
 |---|---|---|---|---|
 | 2.1.1 | Match storage services to cost and performance needs | Planned | S3 vs Redshift vs Kinesis: [ADR-0001](adr/0001-ingest-and-warehouse-stack.md) and its [cost-tier annex](adr/0001-hybrid-cost-tiers.md) | 🟡 |
 | 2.1.2 | Configure stores for access patterns | Planned | Redshift sort/distribution keys; S3 partitioning | ⬜ |
-| 2.1.3 | Specialised stores (vector index, key/value) | Not planned | — | ⬜ |
-| 2.1.4 | Migration tools such as Transfer Family | Not planned | — | ⬜ |
+| 2.1.3 | Specialised stores (vector index, key/value) | Planned | T1d: S3 Vectors index of product embeddings for a "similar products" lookup. Est. < ₹5 | ⬜ |
+| 2.1.4 | Migration tools such as Transfer Family | Not planned | Accepted limitation: a Transfer Family endpoint costs ≈ ₹34/hour while it exists (≈ ₹25,000/month if left running) | ⬜ |
 | 2.1.5 | Federated queries, materialized views, Spectrum | Planned | Redshift Spectrum over S3 or a materialized view | ⬜ |
-| 2.1.6 | Manage locks | Not planned | — | ⬜ |
+| 2.1.6 | Manage locks | Planned | T2: DynamoDB conditional-write lock so only one batch run executes at a time. Est. ₹0 | ⬜ |
 | 2.1.7 | Open table formats (Iceberg) | Planned | T1: Silver as an Apache Iceberg table queried by Athena | ⬜ |
-| 2.1.8 | Vector index types | Not planned | — | ⬜ |
+| 2.1.8 | Vector index types | Planned | T1d: same S3 Vectors demo (partial: S3 Vectors does not expose HNSW/IVF index types; concept note covers them) | ⬜ |
 
 ### Task 2.2: Data cataloging
 
@@ -121,7 +125,7 @@ Accepted 2026-09-25):
 | 2.2.3 | Discover schemas with crawlers | Planned | T1: one crawler run on Bronze compared with IaC-defined tables (crawler cost noted) | ⬜ |
 | 2.2.4 | Keep partitions in sync with the catalog | Planned | Athena partition projection on monthly partitions, [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.2.5 | Create catalog connections | Stretch | — | ⬜ |
-| 2.2.6 | Business data catalogs | Not planned | — | ⬜ |
+| 2.2.6 | Business data catalogs | Not planned | Accepted limitation: SageMaker Unified Studio / DataZone has no Mumbai price in the Price List API (2026-10-05) | ⬜ |
 
 ### Task 2.3: Data lifecycle
 
@@ -140,10 +144,10 @@ Accepted 2026-09-25):
 |---|---|---|---|---|
 | 2.4.1 | Design Redshift / DynamoDB / Lake Formation schemas | Planned | Two-grain star schema (clicks, visits), [ADR-0003](adr/0003-data-model.md) | 🟡 |
 | 2.4.2 | Handle changing data characteristics | Planned | T1: add a column to the Iceberg Silver table (schema evolution) without rewriting data | ⬜ |
-| 2.4.3 | Schema conversion tools | Not planned | — | ⬜ |
-| 2.4.4 | Data lineage tooling | Not planned | — | ⬜ |
+| 2.4.3 | Schema conversion tools | Not planned | Accepted limitation: needs a paid source database; no migration in this project | ⬜ |
+| 2.4.4 | Data lineage tooling | Not planned | Accepted limitation: lineage tooling (SageMaker Catalog) is unpriced for Mumbai (2026-10-05) | ⬜ |
 | 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet partitioned by month (`click_month`, `visit_month`) in `local_run.py` (local run, tier T0); Redshift sort and distribution keys still designed only, [ADR-0003](adr/0003-data-model.md) | ✅ |
-| 2.4.6 | Vectorization concepts | Not planned | — | ⬜ |
+| 2.4.6 | Vectorization concepts | Planned | T1d: same S3 Vectors demo (embeddings generated with Bedrock) | ⬜ |
 
 ---
 
@@ -157,8 +161,8 @@ Accepted 2026-09-25):
 | 3.1.2 | Troubleshoot managed workflows | Planned | Runbook entries | ⬜ |
 | 3.1.3 | Call AWS SDKs from code | Planned | boto3 event generator | ⬜ |
 | 3.1.4 | Use service features to process data | Planned | Glue, Redshift | ⬜ |
-| 3.1.5 | Consume and maintain data APIs | Not planned | — | ⬜ |
-| 3.1.6 | Prepare data with DataBrew / Unified Studio | Not planned | — | ⬜ |
+| 3.1.5 | Consume and maintain data APIs | Planned | T2: same HTTP API as 1.2.8, called from a script | ⬜ |
+| 3.1.6 | Prepare data with DataBrew / Unified Studio | Planned | T1d: one AWS Glue DataBrew recipe job (jobs only; interactive sessions cost about ₹114 each). Est. ≈ ₹10, minimum billing to verify | ⬜ |
 | 3.1.7 | Query data with Athena | Planned | Athena queries on Silver/Gold | ⬜ |
 | 3.1.8 | Automate processing with Lambda | Planned | Generator and trigger functions | ⬜ |
 | 3.1.9 | Manage events and schedules | Planned | EventBridge | ⬜ |
@@ -170,7 +174,7 @@ Accepted 2026-09-25):
 | 3.2.1 | Visualize data | Planned | Streamlit app on Athena plus a published snapshot ([ADR-0002](adr/0002-dashboard-streamlit.md)); QuickSight itself not shown | 🟡 |
 | 3.2.2 | Verify and clean data | Planned | Athena validation queries | ⬜ |
 | 3.2.3 | Query and create views with SQL in Redshift and Athena | Planned | Views in both engines | ⬜ |
-| 3.2.4 | Explore data with Athena Spark notebooks | Not planned | — | ⬜ |
+| 3.2.4 | Explore data with Athena Spark notebooks | Planned | T1d: one Athena Spark notebook session of about 20 minutes. Est. ≈ ₹50, minimum DPUs to verify | ⬜ |
 | 3.2.5 | Weigh provisioned vs serverless | Planned | [ADR-0001](adr/0001-ingest-and-warehouse-stack.md), `cost-model.md` | 🟡 |
 | 3.2.6 | Aggregation, rolling averages, grouping, pivoting | Planned | Grouping and aggregation in `sql/summaries/*.sql`, `tests/test_summaries.py` (local run, tier T0) | ✅ |
 
@@ -214,7 +218,7 @@ repo defines roles and policies; the owner applies them.
 | 4.1.4 | Roles for service access | Planned | Lambda, Glue, Firehose, Redshift roles, one per service ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
 | 4.1.5 | Policies on access points and endpoints | Planned | T1: S3 access point for read-only analyst access to Gold | ⬜ |
 | 4.1.6 | Managed vs unmanaged services | Planned | ADR discussion | ⬜ |
-| 4.1.7 | SageMaker Unified Studio domains/projects | Not planned | — | ⬜ |
+| 4.1.7 | SageMaker Unified Studio domains/projects | Not planned | Accepted limitation: SageMaker Unified Studio is unpriced for Mumbai (2026-10-05) | ⬜ |
 
 ### Task 4.2: Authorization
 
@@ -233,7 +237,7 @@ repo defines roles and policies; the owner applies them.
 |---|---|---|---|---|
 | 4.3.1 | Mask and anonymise data | Planned | Hashed user IDs | ⬜ |
 | 4.3.2 | Encrypt with KMS keys | Stretch | SSE-S3 chosen; KMS key rejected for cost and deletion wait ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | ⬜ |
-| 4.3.3 | Cross-account encryption | Not planned | Single account | ⬜ |
+| 4.3.3 | Cross-account encryption | Not planned | Accepted limitation: needs AWS Organizations and a second account, an owner-only governance change (cost is not the blocker) | ⬜ |
 | 4.3.4 | Encryption in transit | Planned | TLS-only bucket policy | ⬜ |
 
 ### Task 4.4: Logs for audit
@@ -242,18 +246,18 @@ repo defines roles and policies; the owner applies them.
 |---|---|---|---|---|
 | 4.4.1 | Track API calls with CloudTrail | Planned | T2: same evidence as 3.3.5 (CloudTrail) | ⬜ |
 | 4.4.2 | Store app logs in CloudWatch Logs | Planned | Same as 3.3.7 | ⬜ |
-| 4.4.3 | Centralised queries with CloudTrail Lake | Not planned | — | ⬜ |
+| 4.4.3 | Centralised queries with CloudTrail Lake | Planned | T2: CloudTrail Lake event data store for one window, then ingestion stopped and the store deleted (7-day wait). Est. ≈ ₹5 | ⬜ |
 | 4.4.4 | Analyze logs with AWS services | Planned | T2: same evidence as 3.3.8 (Logs Insights) | ⬜ |
-| 4.4.5 | Large-volume logging integrations | Not planned | — | ⬜ |
+| 4.4.5 | Large-volume logging integrations | Planned | T3: CloudWatch Logs subscription filter into the existing Firehose stream. Est. ≈ ₹1 | ⬜ |
 
 ### Task 4.5: Privacy and governance
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 4.5.1 | Grant data-sharing permissions | Not planned | Needs a second Redshift namespace | ⬜ |
-| 4.5.2 | Identify PII | Not planned | Synthetic data only | ⬜ |
-| 4.5.3 | Block replication to disallowed Regions | Not planned | Needs AWS Organizations (owner-only area) | ⬜ |
-| 4.5.4 | View account configuration changes | Not planned | — | ⬜ |
+| 4.5.1 | Grant data-sharing permissions | Planned | T4: Redshift data share to a second Serverless namespace in the same account, inside the T4 window. Est. ₹20–50 extra | ⬜ |
+| 4.5.2 | Identify PII | Planned | T2: Amazon Macie scan of a labelled file of made-up personal data; Macie disabled the same day. Est. < ₹10 | ⬜ |
+| 4.5.3 | Block replication to disallowed Regions | Not planned | Accepted limitation: needs AWS Organizations (SCPs), an owner-only governance change (cost is not the blocker) | ⬜ |
+| 4.5.4 | View account configuration changes | Planned | T2: AWS Config recorder for one window, then stopped. Est. ≈ ₹35 | ⬜ |
 | 4.5.5 | Data sovereignty | Stretch | Mumbai region choice for data residency in [ADR-0001](adr/0001-ingest-and-warehouse-stack.md) | 🟡 |
-| 4.5.6 | Access via SageMaker Catalog projects | Not planned | — | ⬜ |
+| 4.5.6 | Access via SageMaker Catalog projects | Not planned | Accepted limitation: SageMaker Catalog is unpriced for Mumbai (2026-10-05) | ⬜ |
 | 4.5.7 | Governance frameworks and sharing patterns | Stretch | Concept note | ⬜ |

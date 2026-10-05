@@ -381,10 +381,11 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
 | Full test suite on GitHub Actions | 108–137 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
-💰 **Cloud cost (estimate, not measured):** about ₹690 one-time for the full
-hybrid build with a local dashboard, and ₹0/month after teardown. No free
-credits are available (confirmed 2026-10-05), so this is out of pocket at list
-price; about ₹300 if the Redshift work fits one scripted hour. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
+💰 **Cloud cost (estimate, not measured):** about ₹460 one-time for the full
+hybrid build with a local dashboard if the Redshift Serverless trial applies,
+or about ₹650 without it (one paid Redshift hour), and ₹0/month after
+teardown. No free credits are available (confirmed 2026-10-05), so the rest is
+out of pocket at list price. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
 annex, not measured).
 
@@ -395,7 +396,8 @@ annex, not measured).
 This repo doubles as verifiable skills coverage for the **AWS Certified Data
 Engineer – Associate (DEA-C01)** exam guide v1.1: **8 of 120 skills are
 shown** (by the local run and tests), **15 are designed** in ADRs, and **97
-are not started**. See the full breakdown in
+are not started**. The plan covers **104 skills, plus 8 stretch**; the 8 left
+out are recorded as accepted limitations. See the full breakdown in
 [`docs/exam-guide-map.md`](docs/exam-guide-map.md). This is a skills coverage
 map, not exam prep, and it is honest by construction: nothing is marked shown
 without a real run behind it.
@@ -415,6 +417,7 @@ without a real run behind it.
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
 - **T1a has not run on AWS yet**: Glue 6.0 in Mumbai is inferred from a price-list entry, and the Glue role's permission set and minimum worker count are unverified until the first window ([`docs/GAPS.md`](docs/GAPS.md))
 - **Single runs only**: runtimes above are one run each, not averages
+- **8 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), schema conversion, and two multi-account skills that need AWS Organizations ([`docs/GAPS.md`](docs/GAPS.md) §3)
 
 ---
 

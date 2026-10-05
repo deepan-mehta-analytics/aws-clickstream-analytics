@@ -74,6 +74,15 @@ noted.
 | **T5 Dashboard** | Either a local open-source dashboard over Athena, or QuickSight | local ≈ ₹0; QuickSight ₹2,718/Author-month | same | ≈ ₹110 (local) | ≈ ₹3,405 (QuickSight) | ₹0 (cancel seat) | 1 (58) |
 | **T6 Hardening (optional)** | Customer-managed KMS key, Secrets Manager, CloudTrail analysis | ₹113 per key-month; ₹45 per secret-month | depends on hours held | +₹0 if skipped | + ₹160 for one month | **Recurring unless deleted** | Stretch only |
 
+**Update 2026-10-05 (owner decisions; the table above is kept as priced on
+2026-09-25):** no free credits are available (GAPS G-11). T4 is sized by
+Redshift Serverless trial eligibility: up to 3 active hours on the credit if
+the console offers the trial, otherwise one scripted hour (≈ ₹194). 18
+formerly not-planned skills were added as small add-ons to T1c, T1d, T2, T3
+and T4, about ₹170 in total (≈ ₹350 with reruns); see `docs/cost-model.md`
+§3 D–E. New one-time totals with a local dashboard: about ₹460 with the
+trial, about ₹650 without it.
+
 1. Best case: the Redshift Serverless $300 / 90-day trial applies, and the
    dashboard runs locally.
 2. All paid: no trials; one QuickSight Author month.

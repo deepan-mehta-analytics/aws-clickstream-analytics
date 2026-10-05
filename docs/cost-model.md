@@ -135,6 +135,34 @@ the first window.
 | Amazon Quick Free / Plus | Cannot author dashboards |
 | Local open-source dashboard over Athena | $0 AWS BI cost (Athena scans still billed) |
 
+### D. Skills promoted on 2026-10-05, Mumbai (estimates)
+
+Priced from the AWS Price List API for `ap-south-1` (publication dates
+2026-09-11 to 2026-10-05), converted at ₹96.32/USD (ECB via Frankfurter,
+2026-10-02) plus 18% GST. One small demo each, not measured.
+
+| Skill(s) | Demo | Unit price (USD) | Estimate (INR) |
+|---|---|---|---|
+| 1.2.8, 3.1.5 | HTTP API in front of one Athena query | $1.05 per million requests | ≈ ₹0 |
+| 1.1.8, 2.1.6, 1.4.11, 4.4.5 | IP allowlist, DynamoDB lock, concept note, log subscription into Firehose | usage-billed, tiny | ≈ ₹0–1 |
+| 4.5.4 | AWS Config for one window | $0.003 per configuration item recorded; $0.001 per rule evaluation | ≈ ₹35 |
+| 4.5.2 | Macie scan of one small synthetic file | $1.25/GB discovery after a free band (size to verify); $0.0033 per bucket-day | < ₹10 |
+| 4.4.3 | CloudTrail Lake for one window | $0.75/GB ingestion of live CloudTrail logs (1-year retention) | ≈ ₹5 |
+| 3.2.4 | Athena Spark notebook, about 20 minutes | $0.45 per DPU-hour | ≈ ₹50 |
+| 3.1.6 | DataBrew recipe job (no interactive session) | $0.48 per node-hour; $1 per interactive session | ≈ ₹10 |
+| 1.4.7 | Lambda mounting EFS in a VPC | $0.33/GB-month EFS Standard; VPC interface endpoint $0.013/hour if needed | ≈ ₹2 |
+| 1.2.10, 2.1.3, 2.1.8, 2.4.6 | Bedrock labels and embeddings; S3 Vectors index | S3 Vectors $0.066/GB-month + $0.219/GB put; Bedrock to verify | < ₹10 |
+| 1.2.1 | Lambda as a container image | ECR storage to verify | < ₹10 |
+| 4.5.1 | Redshift data share inside the T4 window | billed as Redshift Serverless RPU time while the consumer queries | ₹20–50 extra |
+| **Total** | | | **≈ ₹170** (≈ ₹350 allowing reruns) |
+
+### E. T4 Redshift window, sized by trial eligibility (decision 2026-10-05)
+
+| If | T4 plan | Out of pocket |
+|---|---|---|
+| The console shows the Serverless free-trial banner | Up to 3 active hours on the $300 credit, activated only when T4 starts | ≈ ₹0 compute (storage on the credit or a few rupees) |
+| No banner | One scripted hour at the 4-RPU base | ≈ ₹194 |
+
 ---
 
 ## 4. Leak risks (what costs money while idle)
@@ -146,6 +174,10 @@ the first window.
 | Redshift Serverless workgroup | $0 compute when idle; storage $0.024/GB-month | Set an RPU-hour usage limit. Trial burn is **not visible in the Billing console**, so watch `SYS_SERVERLESS_USAGE` |
 | Quick/QuickSight Author seat | $24/month | Unsubscribe after the demo month |
 | Firehose, Glue, Athena, Lambda | No idle charge (usage-billed) | None needed |
+| AWS Config recorder | Keeps recording every configuration change | Stop the recorder and delete the delivery channel in the window's teardown |
+| Amazon Macie | $0.0033 per bucket-day plus automated discovery while enabled | Disable Macie the same day |
+| CloudTrail Lake event data store | Ingests every management event until stopped | Stop ingestion, then delete the store (7-day pending deletion) |
+| AWS Transfer Family endpoint (not planned) | $0.30/hour ≈ ₹25,000/month | Not built (GAPS L-01) |
 
 An AWS Budgets alert (about $1, set by the account owner) must exist before
 any resource is created. It does not cover Redshift trial usage.
