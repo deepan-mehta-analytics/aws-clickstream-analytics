@@ -188,6 +188,12 @@ any resource is created. It does not cover Redshift trial usage.
 **In place since 2026-10-05 (set by the owner):** a $1 zero-spend budget and
 a $10 monthly cost budget, both with email recipients verified (Active), plus
 an AWS Cost Anomaly Detection monitor. No alert has fired; spend is $0.00.
+The anomaly monitor's default alert only fires above $100 and 40% of expected
+spend, and needs 10 days of history for a new service ([Enabling Cost
+Explorer](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-enable.html),
+[Cost Anomaly Detection](https://docs.aws.amazon.com/cost-management/latest/userguide/manage-ad.html),
+fetched 2026-10-05), so at this project's scale the zero-spend budget is the
+real backstop.
 
 ---
 
