@@ -13,7 +13,9 @@ The pipeline runs fully on a laptop today (the "local twin", tier T0), and
 every count it produces is checked against the real file. The AWS version is
 being built in small priced tiers in the Mumbai region: the **Spark job for
 AWS Glue and the ingest Lambda are written and tested locally**, and Spark
-matches pandas on every one of the 165,474 clicks. Nothing is deployed yet.
+matches pandas on every one of the 165,474 clicks. The first AWS window
+(2026-10-05) created only a small artifacts bucket: the T1a stack rolled back
+on two account-level limits, and AWS Support is enabling Glue for the account.
 Every cloud resource will be torn down after use, so the project costs
 nothing per month once it is published.
 
@@ -285,11 +287,12 @@ local-only files tracked) and a **test** job (Python 3.11, Java 17, ruff,
 cfn-lint, pytest). It downloads the dataset and checks its MD5 first, so the
 full-file and pandas-vs-Spark tests run for real there.
 
-### ☁️ Option 4: Tier T1a on AWS (owner only, not run yet)
+### ☁️ Option 4: Tier T1a on AWS (owner only, first attempt 2026-10-05)
 
 Only the account owner runs these steps; no agent or CI job holds AWS
-credentials. Nothing below has been run, and every value in angle brackets is
-a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
+credentials. Steps 1–5 were run on 2026-10-05 (the stack creation rolled
+back, GAPS G-18, G-19); steps 6–7 have not run yet. Every value in angle
+brackets is a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
 
 0. Pre-flight checklist in [`infra/README.md`](infra/README.md): an AWS
    Budgets alert exists, the console is on Mumbai, and no unmasked
@@ -383,7 +386,7 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | Run | What it did | Duration |
 |---|---|---|
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
-| Full test suite on GitHub Actions | 108–137 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
+| Full test suite on GitHub Actions | 108–138 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
 
 💰 **Cloud cost (estimate, not measured):** about ₹450 one-time for the full
 hybrid build with a local dashboard, and ₹0/month after teardown. The
@@ -414,8 +417,8 @@ without a real run behind it.
 - **No checkout or purchase events**: the funnel is a **browse-depth** funnel, not a purchase funnel
 - **Time of day and device are synthetic**: generated from a fixed seed, and labelled `_synthetic` everywhere
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%)
-- **No AWS resources exist yet**: the cloud tiers are designed and priced; the T1a Lambda and Glue code is tested locally only, never run on AWS
-- **Infrastructure as code is written but not deployed**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The foundation (artifacts bucket) and T1a lake templates exist and pass cfn-lint and guardrail tests; neither has been deployed
+- **Only the artifacts bucket exists in AWS**: the cloud tiers are designed and priced; the T1a Lambda and Glue code is tested locally only, never run on AWS
+- **Infrastructure as code is written but not deployed**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The foundation (artifacts bucket) and T1a lake templates pass cfn-lint and guardrail tests; the foundation was deployed on 2026-10-05, the T1a lake stack not yet
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable

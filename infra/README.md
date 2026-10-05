@@ -7,8 +7,8 @@ credentials; CI only lints and tests the templates.
 
 | Folder | Stack name | What it creates | Status |
 |---|---|---|---|
-| `foundation/` | `clickstream-foundation` | One S3 bucket for packaged code (SSE-S3, private, TLS only, 30-day expiry) | Written, not deployed |
-| `t1-lake/` | `clickstream-t1-lake` | Tier T1a (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job and catalog, Athena workgroup) | Written, not deployed |
+| `foundation/` | `clickstream-foundation` | One S3 bucket for packaged code (SSE-S3, private, TLS only, 30-day expiry) | Deployed 2026-10-05 (owner); kept between windows |
+| `t1-lake/` | `clickstream-t1-lake` | Tier T1a (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job and catalog, Athena workgroup) | Two creation attempts on 2026-10-05 rolled back on account-level limits (GAPS G-18, G-19) and were deleted; waiting on AWS Support to enable Glue |
 
 ## Checks (no AWS credentials)
 
@@ -82,7 +82,7 @@ in [`docs/cost-model.md`](../docs/cost-model.md).
 Run the commands in this order from the repository root, in PowerShell 7.3 or
 later. Values in angle brackets are placeholders; the real values come from
 your stack outputs and stay out of the repository. The scripts are described
-in [`scripts/README.md`](../scripts/README.md). Nothing here has been run yet.
+in [`scripts/README.md`](../scripts/README.md). Steps 1–5 were run on 2026-10-05; step 5's stack creation stopped on account-level limits (see below), so steps 6–7 have not run yet.
 
 **Pre-flight: do not start the window until every box is ticked.**
 
