@@ -419,7 +419,7 @@ without a real run behind it.
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
-- **T1a has not run on AWS yet**: Glue 6.0 in Mumbai is inferred from a price-list entry, and the Glue role's permission set and minimum worker count are unverified until the first window ([`docs/GAPS.md`](docs/GAPS.md))
+- **T1a has not run on AWS yet**: the first deploy attempts (2026-10-05) hit two account-level limits on AWS's side, a 10-unit Lambda concurrency quota (worked around with a parameter) and Glue being disabled for the account (AWS Support case open), and both rolled back cleanly ([`docs/GAPS.md`](docs/GAPS.md) G-18, G-19). Glue 6.0 in Mumbai is inferred from a price-list entry, and the Glue role's permission set and minimum worker count are unverified until the first window ([`docs/GAPS.md`](docs/GAPS.md))
 - **Single runs only**: runtimes above are one run each, not averages
 - **8 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), schema conversion, and two multi-account skills that need AWS Organizations ([`docs/GAPS.md`](docs/GAPS.md) §3)
 
