@@ -54,7 +54,14 @@ def test_glue_arguments_match_the_script():                             # templa
 
 def test_lambda_settings():                                             # runtime and cap
     function = RESOURCES["IngestFunction"]["Properties"]                # function settings
-    assert (function["Runtime"], function["Architectures"], function["ReservedConcurrentExecutions"], function["MemorySize"], function["Timeout"]) == ("python3.13", ["arm64"], 1, 512, 60)  # as the spec says
+    assert (function["Runtime"], function["Architectures"], function["MemorySize"], function["Timeout"]) == ("python3.13", ["arm64"], 512, 60)  # as the spec says
+    assert function["ReservedConcurrentExecutions"] == {"Fn::If": ["CapIngestConcurrency", {"Ref": "IngestReservedConcurrency"}, {"Ref": "AWS::NoValue"}]}  # cap only when the parameter is above 0
+
+
+def test_ingest_concurrency_cap_is_a_parameter_off_by_default():        # accounts with a reduced Lambda quota (10) cannot reserve any
+    parameter = TEMPLATE["Parameters"]["IngestReservedConcurrency"]     # deploy-time setting
+    assert (parameter["Type"], parameter["Default"], parameter["MinValue"], parameter["MaxValue"]) == ("Number", 0, 0, 1)  # 0 = no reservation, 1 = one run at a time
+    assert TEMPLATE["Conditions"]["CapIngestConcurrency"] == {"Fn::Not": [{"Fn::Equals": [{"Ref": "IngestReservedConcurrency"}, "0"]}]}  # Ref of a Number compares as text
 
 
 def test_workgroup_enforces_scan_limit():                               # cost fuse on queries

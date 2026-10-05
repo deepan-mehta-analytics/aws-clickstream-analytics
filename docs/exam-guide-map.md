@@ -88,7 +88,7 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 1.4.1 | Reduce ingest/transform runtime | Planned | T1: measured before/after runtime and bytes scanned (CSV vs Parquet, partition pruning) | ⬜ |
-| 1.4.2 | Tune Lambda concurrency and performance | Planned | T1: reserved concurrency and memory settings on the ingest Lambda, in the SAM template | ⬜ |
+| 1.4.2 | Tune Lambda concurrency and performance | Planned | T1: memory and timeout on the ingest Lambda; reserved concurrency is the `IngestReservedConcurrency` parameter, shown once the account's 10-unit Lambda quota is raised (GAPS G-18) | ⬜ |
 | 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
 | 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
 | 1.4.5 | Deploy with IaC | Planned | One SAM-extended CloudFormation stack per tier, owner-deployed via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |

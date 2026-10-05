@@ -20,6 +20,15 @@ CSV_TEXT = "\r\n".join([HEADER, "2008;4;1;1;29;1;1;A13;1;5;1;28;2;1", "2008;4;1;
 LAMBDA_TIMEOUT_SECONDS = 60                                             # Lambda function timeout (fixed in global constraints)
 
 
+@pytest.fixture(autouse=True)                                           # every test in this file
+def fake_aws_credentials(monkeypatch):                                  # never read the owner's real AWS sign-in
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")                  # environment credentials come first in boto3's chain
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")              # fake secret
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "testing")                  # fake session token
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(Path(__file__).parent / "no-such-aws-config"))   # ignore ~/.aws/config (an `aws login` profile needs botocore[crt])
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(Path(__file__).parent / "no-such-aws-credentials"))   # ignore ~/.aws/credentials
+
+
 def fake_zip(text=CSV_TEXT):                                            # zip holding the CSV, like UCI's
     buffer = io.BytesIO()                                               # in memory
     with zipfile.ZipFile(buffer, "w") as archive:                       # write a zip

@@ -19,6 +19,14 @@ Parameters:                                                # values supplied at 
     Type: String                                           # version text
     Default: "6.0"                                         # Spark 4.1.1, Python 3.13
     AllowedValues: ["6.0", "5.1"]                          # 5.1 (Spark 3.5.6) only if 6.0 is not offered in ap-south-1
+  IngestReservedConcurrency:                               # concurrency reserved for the ingest Lambda
+    Type: Number                                           # whole number
+    Default: 0                                             # 0 = reserve none: accounts with the reduced 10-unit Lambda quota cannot reserve any
+    MinValue: 0                                            # no reservation
+    MaxValue: 1                                            # 1 = one run at a time, once the account quota allows it (1.4.2)
+
+Conditions:                                                # optional settings
+  CapIngestConcurrency: !Not [!Equals [!Ref IngestReservedConcurrency, "0"]]  # true when a reservation was asked for
 
 Resources:                                                 # everything this stack creates
   # ── Buckets (bronze versioned; results expire) ─────────────
@@ -202,7 +210,7 @@ Resources:                                                 # everything this sta
       Architectures: [arm64]                               # Graviton: cheaper per GB-second
       MemorySize: 512                                      # enough for a 6.7 MB CSV in memory
       Timeout: 60                                          # seconds
-      ReservedConcurrentExecutions: 1                      # one run at a time (1.4.2)
+      ReservedConcurrentExecutions: !If [CapIngestConcurrency, !Ref IngestReservedConcurrency, !Ref AWS::NoValue]  # reserved only when the parameter is 1 (1.4.2); left unset on a 10-unit account
       LoggingConfig:                                       # log settings
         LogFormat: JSON                                    # structured logs (3.3.7)
       Environment:                                         # settings for the code

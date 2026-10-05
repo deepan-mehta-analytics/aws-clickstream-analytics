@@ -139,6 +139,13 @@ pwsh scripts/t1a-teardown.ps1
 aws logout
 ```
 
+If the first deploy fails with "decreases account's UnreservedConcurrentExecution
+below its minimum value", the account's Lambda concurrency quota is reduced
+(10 on this account, GAPS G-18). The template's `IngestReservedConcurrency`
+parameter defaults to 0 (no reservation) for that reason. A stack left in
+`ROLLBACK_COMPLETE` must be deleted (`aws cloudformation delete-stack`, then
+`aws cloudformation wait stack-delete-complete`) before deploying again.
+
 If Glue 6.0 is not available in `ap-south-1`, redeploy with the template's
 `GlueVersion` parameter set to `5.1` (see
 [ADR-0005](../docs/adr/0005-t1-batch-lake-design.md)). Masked evidence lands in

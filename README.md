@@ -33,7 +33,7 @@ nothing per month once it is published.
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![pytest](https://img.shields.io/badge/pytest-137_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
+[![pytest](https://img.shields.io/badge/pytest-138_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-T0_Verified_·_T1a_In_Development-yellow?style=for-the-badge)](PROJECT-STATUS.md)
 [![Exam coverage](https://img.shields.io/badge/DEA--C01-8%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
@@ -64,7 +64,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 - **Spark Silver and Gold**: the same stages in PySpark 4.1.1 (the Spark version in AWS Glue 6.0), proven equal to pandas on all 165,474 clicks
 - **Glue job entry point**: job bookmarks pick up only new Bronze files; monthly lake writes are rerun-safe
 - **Library zip**: a build script packages the pipeline code and SQL for the Glue job
-- **SAM stack** (`infra/t1-lake`): four private SSE-S3 buckets, the ingest Lambda (reserved concurrency 1), a Glue 6.0 FLEX job with a 15-minute timeout, 13 Glue Catalog tables with partition projection, and an Athena workgroup with a 1 GB scan cutoff, all checked by guardrail tests
+- **SAM stack** (`infra/t1-lake`): four private SSE-S3 buckets, the ingest Lambda (concurrency cap as a deploy parameter, off by default because this account's Lambda quota is 10; GAPS G-18), a Glue 6.0 FLEX job with a 15-minute timeout, 13 Glue Catalog tables with partition projection, and an Athena workgroup with a 1 GB scan cutoff, all checked by guardrail tests
 - **Owner window and teardown tooling**: PowerShell scripts for the owner to deploy, run and verify the stack, then empty the buckets (versions included) and delete it, confirming the stack is gone; five Athena validation queries; evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts
 
 **🔜 Planned**
@@ -93,7 +93,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 | 🗄️ Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
 | 🦆 Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | 🕒 Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 Testing | pytest 9 | 137 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧪 Testing | pytest 9 | 138 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
 | 🧹 Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
 | ⚙️ CI | GitHub Actions | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | ☁️ Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
@@ -222,7 +222,7 @@ aws-clickstream-analytics/
 ├── infra/foundation/template.yaml   ← artifacts-bucket stack (owner-deployed only)
 ├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup (not deployed)
 │
-├── tests/                           ← 137 pytest tests (see tests/README.md)
+├── tests/                           ← 138 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                         ← ADRs 0001–0005 (all accepted) + cost-tier annex
@@ -321,7 +321,7 @@ a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
 
 ```bash
 .venv/Scripts/python -m ruff check src tests lambdas scripts glue
-.venv/Scripts/python -m pytest -v        # → 137 passed on Linux CI (133 run, 4 skipped on Windows)
+.venv/Scripts/python -m pytest -v        # → 138 passed on Linux CI (134 run, 4 skipped on Windows)
 .venv/Scripts/cfn-lint
 ```
 

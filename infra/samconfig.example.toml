@@ -8,4 +8,4 @@ s3_bucket = "<ArtifactsBucketName output of the clickstream-foundation stack>"  
 s3_prefix = "t1-lake"                                     # folder inside the artifacts bucket
 capabilities = "CAPABILITY_IAM"                           # templates create unnamed IAM roles
 confirm_changeset = true                                  # always show the change set before applying
-parameter_overrides = "ArtifactsBucketName=<ArtifactsBucketName output of the clickstream-foundation stack> GlueVersion=6.0"  # template parameters
+parameter_overrides = "ArtifactsBucketName=<ArtifactsBucketName output of the clickstream-foundation stack> GlueVersion=6.0"  # template parameters (add IngestReservedConcurrency=1 once the Lambda concurrency quota is above 10)
