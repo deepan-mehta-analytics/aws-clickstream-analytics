@@ -57,13 +57,15 @@ official skill. It was built from exam guide version 1.1 (published
 2025-12-12), fetched 2026-09-25; re-checks are logged in
 [`exam-guide-delta.md`](exam-guide-delta.md).
 
-Summary as of 2026-10-05: 120 skills, of which 104 are planned, 8 stretch
-and 8 not planned. History: ADR-0004 moved 1.4.6 and 1.4.8 to planned, and
+Summary as of 2026-10-05: 120 skills, of which 103 are planned, 8 stretch
+and 9 not planned. History: ADR-0004 moved 1.4.6 and 1.4.8 to planned, and
 26 stretch skills were promoted as low-cost tier add-ons on 2026-09-26. On
 2026-10-05 the owner promoted 18 of the 26 not-planned skills after each was
-priced in Mumbai (about ₹170 in total, estimates; see `cost-model.md` §3 D).
-The thinnest domain is still 4 (Security and Governance), now with 20 of 29
-planned. The 8 remaining not-planned skills are accepted limitations (§3).
+priced in Mumbai (about ₹165 in total, estimates; see `cost-model.md` §3 D).
+One of the 18, 4.4.3 (CloudTrail Lake), returned to not planned the same day
+because the service closed to new customers (L-05). The thinnest domain is
+still 4 (Security and Governance), now with 19 of 29 planned. The 9
+remaining not-planned skills are accepted limitations (§3).
 
 ---
 
@@ -78,3 +80,4 @@ a bullet in the README's Known Limitations.
 | L-02 | No SageMaker Unified Studio, Catalog projects, business catalog or lineage tooling (2.2.6, 2.4.4, 4.1.7, 4.5.6) | No Mumbai prices in the AWS Price List API (2026-10-05), and a domain creates resources underneath; unpriced work is not started |
 | L-03 | No schema conversion between database engines (2.4.3) | Needs a paid source database, and nothing in this project migrates |
 | L-04 | No cross-account encryption or Region-blocking SCP (4.3.3, 4.5.3) | Both need AWS Organizations and a second account: an owner-only governance change, and a closed account takes 90 days to clean up. Cost is not the blocker (a KMS key is about ₹114 per month; SCPs are free) |
+| L-05 | No CloudTrail Lake demo (4.4.3) | CloudTrail Lake closed to new customers on 2026-05-31 and this account never used it ([AWS notice](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-service-availability-change.html), fetched 2026-10-05). AWS recommends CloudWatch instead; T2 already queries CloudTrail events with CloudWatch Logs Insights (4.4.4). Exam guide v1.1 still lists the skill, so it is studied as a concept |

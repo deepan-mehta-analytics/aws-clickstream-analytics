@@ -147,14 +147,16 @@ Priced from the AWS Price List API for `ap-south-1` (publication dates
 | 1.1.8, 2.1.6, 1.4.11, 4.4.5 | IP allowlist, DynamoDB lock, concept note, log subscription into Firehose | usage-billed, tiny | ≈ ₹0–1 |
 | 4.5.4 | AWS Config for one window | $0.003 per configuration item recorded; $0.001 per rule evaluation | ≈ ₹35 |
 | 4.5.2 | Macie scan of one small synthetic file | $1.25/GB discovery after a free band (size to verify); $0.0033 per bucket-day | < ₹10 |
-| 4.4.3 | CloudTrail Lake for one window | $0.75/GB ingestion of live CloudTrail logs (1-year retention) | ≈ ₹5 |
 | 3.2.4 | Athena Spark notebook, about 20 minutes | $0.45 per DPU-hour | ≈ ₹50 |
 | 3.1.6 | DataBrew recipe job (no interactive session) | $0.48 per node-hour; $1 per interactive session | ≈ ₹10 |
 | 1.4.7 | Lambda mounting EFS in a VPC | $0.33/GB-month EFS Standard; VPC interface endpoint $0.013/hour if needed | ≈ ₹2 |
 | 1.2.10, 2.1.3, 2.1.8, 2.4.6 | Bedrock labels and embeddings; S3 Vectors index | S3 Vectors $0.066/GB-month + $0.219/GB put; Bedrock to verify | < ₹10 |
 | 1.2.1 | Lambda as a container image | ECR storage to verify | < ₹10 |
 | 4.5.1 | Redshift data share inside the T4 window | billed as Redshift Serverless RPU time while the consumer queries | ₹20–50 extra |
-| **Total** | | | **≈ ₹170** (≈ ₹350 allowing reruns) |
+| **Total** | | | **≈ ₹165** (≈ ₹340 allowing reruns) |
+
+4.4.3 (CloudTrail Lake, ≈ ₹5) was dropped the same day: the service closed to
+new customers on 2026-05-31 (GAPS L-05).
 
 ### E. T4 Redshift window, sized by trial eligibility (decision 2026-10-05)
 
@@ -179,7 +181,6 @@ credit also covers Serverless storage and snapshots, per the console docs.
 | Firehose, Glue, Athena, Lambda | No idle charge (usage-billed) | None needed |
 | AWS Config recorder | Keeps recording every configuration change | Stop the recorder and delete the delivery channel in the window's teardown |
 | Amazon Macie | $0.0033 per bucket-day plus automated discovery while enabled | Disable Macie the same day |
-| CloudTrail Lake event data store | Ingests every management event until stopped | Stop ingestion, then delete the store (7-day pending deletion) |
 | AWS Transfer Family endpoint (not planned) | $0.30/hour ≈ ₹25,000/month | Not built (GAPS L-01) |
 
 An AWS Budgets alert (about $1, set by the account owner) must exist before

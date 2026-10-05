@@ -11,18 +11,20 @@ wording below is **paraphrased**; the official guide is the authority.
 **Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 15 designed · 97 not started**
 (as of 2026-10-05; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
 
-**Plan: 104 planned · 8 stretch · 8 not planned.** Planned skills by
-domain: D1 37/37, D2 20/26, D3 27/28, D4 20/29. On 2026-09-26, 26 stretch
+**Plan: 103 planned · 8 stretch · 9 not planned.** Planned skills by
+domain: D1 37/37, D2 20/26, D3 27/28, D4 19/29. On 2026-09-26, 26 stretch
 skills were promoted to planned as low-cost add-ons to tiers T1–T4 (each row
 names its tier); the costs of Glue Data Quality, Lake Formation, CloudTrail,
 Logs Insights and Parameter Store are to be verified before T2 is built. On
 2026-10-05, with no free credits available, 18 of the 26 not-planned skills
 were promoted after pricing each one in Mumbai from the AWS Price List API
 (about ₹170 in total, estimates, not measured); each row names its tier and
-estimate, and each one adds a line to that tier's teardown. The 8 left are
-accepted limitations (see `GAPS.md` §3): unpriced SageMaker services, a
-Transfer Family leak risk, a schema-conversion source database, and two
-skills that need AWS Organizations. Twelve skills (11 planned, 1 stretch)
+estimate, and each one adds a line to that tier's teardown. One of them,
+4.4.3 (CloudTrail Lake), went back to not planned the same day: CloudTrail
+Lake closed to new customers on 2026-05-31. The 9 left are accepted
+limitations (see `GAPS.md` §3): unpriced SageMaker services, a Transfer
+Family leak risk, a schema-conversion source database, two skills that need
+AWS Organizations, and CloudTrail Lake. Twelve skills (11 planned, 1 stretch)
 depend on the streaming and Redshift windows in ADR-0001, and would be lost with a
 batch-only design.
 
@@ -246,7 +248,7 @@ repo defines roles and policies; the owner applies them.
 |---|---|---|---|---|
 | 4.4.1 | Track API calls with CloudTrail | Planned | T2: same evidence as 3.3.5 (CloudTrail) | ⬜ |
 | 4.4.2 | Store app logs in CloudWatch Logs | Planned | Same as 3.3.7 | ⬜ |
-| 4.4.3 | Centralised queries with CloudTrail Lake | Planned | T2: CloudTrail Lake event data store for one window, then ingestion stopped and the store deleted (7-day wait). Est. ≈ ₹5 | ⬜ |
+| 4.4.3 | Centralised queries with CloudTrail Lake | Not planned | Accepted limitation: CloudTrail Lake closed to new customers on 2026-05-31 ([AWS notice](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-service-availability-change.html), fetched 2026-10-05); AWS now points to CloudWatch, and 4.4.4 already queries CloudTrail events with CloudWatch Logs Insights in T2 | ⬜ |
 | 4.4.4 | Analyze logs with AWS services | Planned | T2: same evidence as 3.3.8 (Logs Insights) | ⬜ |
 | 4.4.5 | Large-volume logging integrations | Planned | T3: CloudWatch Logs subscription filter into the existing Firehose stream. Est. ≈ ₹1 | ⬜ |
 

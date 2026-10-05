@@ -82,7 +82,9 @@ formerly not-planned skills were added as small add-ons to T1c, T1d, T2, T3
 and T4, about ₹170 in total (≈ ₹350 with reruns); see `docs/cost-model.md`
 §3 D–E. New one-time totals with a local dashboard: about ₹460 with the
 trial, about ₹650 without it. The trial was confirmed available the same day
-(GAPS G-05), so about ₹460 applies.
+(GAPS G-05), so about ₹460 applies. Later the same day 4.4.3 (CloudTrail Lake)
+was dropped because the service closed to new customers, leaving 17 add-ons at
+about ₹165 (≈ ₹340 with reruns) and a total of about ₹450.
 
 1. Best case: the Redshift Serverless $300 / 90-day trial applies, and the
    dashboard runs locally.
