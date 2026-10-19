@@ -2,24 +2,29 @@
 
 ## ⚡ Quick Summary
 
-This project turns raw website clicks into answers a shop owner can act on:
-how many people visit each day, how deep they browse, and which products make
-them leave after one click. It uses **real clickstream data** from a 2008
-online clothing shop: 165,474 clicks across 24,026 visits. It is built as a
-layered data pipeline (Bronze → Silver → Gold) with data-quality checks at
-every step.
-
-The pipeline runs fully on a laptop today (the "local twin", tier T0), and
-every count it produces is checked against the real file. The AWS version is
-being built in small priced tiers in the Mumbai region: the **Spark job for
-AWS Glue and the ingest Lambda are written and tested locally**, and Spark
-matches pandas on every one of the 165,474 clicks. The first AWS window
-(2026-10-05) created only a small artifacts bucket: the T1a stack rolled back
-on two account-level limits, and AWS Support is enabling Glue for the account.
-Every cloud resource will be torn down after use, so the project costs
-nothing per month once it is published.
+A clickstream analytics pipeline that turns raw website clicks into answers a
+shop owner can act on: how many people visit each day, how deep they browse,
+and which products make them leave after one click.
 
 ### Real data, honest labels, and a cloud path priced in rupees before a single resource is created
+
+#### 🛍️ The data
+
+- 📄 **Real clickstream data** — a 2008 online clothing shop: **165,474 clicks** across **24,026 visits**
+- 🏷️ **Honest labels** — the source has no time of day or device, so those are generated from a fixed seed and marked `_synthetic`
+
+#### 🏗️ The pipeline
+
+- 🥇 **Layered Bronze → Silver → Gold pipeline** with **data-quality checks at every step**; rejected clicks are kept with a reason, never silently dropped
+- 💻 **Runs fully on a laptop today** — the "local twin" (tier T0), with **every count checked against the real file**
+- ⚡ **Spark matches pandas on every one of the 165,474 clicks** — the **Spark job for AWS Glue** and the **ingest Lambda** are written and tested locally
+
+#### ☁️ The AWS path (Mumbai region)
+
+- 💰 **Priced before it's built** — the AWS version is being built in small tiers, each priced in rupees first
+- 🧱 **Infrastructure as code** — an AWS SAM + CloudFormation stack, checked by guardrail tests
+- 🚧 **First window (2026-10-05)** — created only a small artifacts bucket; the T1a stack rolled back on two account-level limits, and AWS Support is enabling Glue for the account
+- 🧹 **Torn down after use** — every cloud resource will be removed after its window, so the project costs nothing per month once it is published
 
 ---
 
@@ -51,37 +56,45 @@ two-grain star schema**, designed for AWS and built and tested locally first.
 It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive.ics.uci.edu/dataset/553/clickstream+data+for+online+shopping)
 (CC BY 4.0).
 
-**✅ Implemented and verified (tier T0: local twin, no AWS)**
+### ✅ Implemented and verified (tier T0: local twin, no AWS)
 
-- **Bronze `clicks_received`**: every click as it arrived, including simulated resends
-- **Silver `clicks`**: one cleaned row per real click; hard quality rules send failures to `clicks_rejected` with a reason, never silently dropped
-- **Gold star schema**: `clicks` (one row per click) and `visits` (one row per visit), plus reference tables `products`, `countries`, `calendar_days`, `devices`
-- **Dashboard summaries in portable SQL**: daily visits, browse-depth funnel, bounce rate by product, visits by country and device
-- **Labelled synthetic enrichment**: the source has dates but no time of day or device, so these are generated from a fixed seed in columns ending `_synthetic`
-- **Reconciliation against measured facts**: a test runs the real file end to end and checks every count against the numbers measured from the source
+- 🥉 **Bronze `clicks_received`** — every click as it arrived, including simulated resends
+- 🥈 **Silver `clicks`** — one cleaned row per real click; hard quality rules send failures to `clicks_rejected` with a reason, never silently dropped
+- 🥇 **Gold star schema** — `clicks` (one row per click) and `visits` (one row per visit), plus reference tables `products`, `countries`, `calendar_days`, `devices`
+- 📊 **Dashboard summaries in portable SQL** — daily visits, browse-depth funnel, bounce rate by product, visits by country and device
+- 🏷️ **Labelled synthetic enrichment** — the source has dates but no time of day or device, so these are generated from a fixed seed in columns ending `_synthetic`
+- 🧮 **Reconciliation against measured facts** — a test runs the real file end to end and checks every count against the numbers measured from the source
 
-**🧱 Built and tested locally, not deployed (tier T1a: core lake)**
+### 🧱 Built and tested locally, not deployed (tier T1a: core lake)
 
-- **Ingest Lambda**: downloads the UCI file, checks its MD5, splits it by month and lands new months in S3 Bronze, with a retry budget that fits the Lambda timeout
-- **Spark Silver and Gold**: the same stages in PySpark 4.1.1 (the Spark version in AWS Glue 6.0), proven equal to pandas on all 165,474 clicks
-- **Glue job entry point**: job bookmarks pick up only new Bronze files; monthly lake writes are rerun-safe
-- **Library zip**: a build script packages the pipeline code and SQL for the Glue job
-- **SAM stack** (`infra/t1-lake`): four private SSE-S3 buckets, the ingest Lambda (concurrency cap as a deploy parameter, off by default because this account's Lambda quota is 10; GAPS G-18), a Glue 6.0 FLEX job with a 15-minute timeout, 13 Glue Catalog tables with partition projection, and an Athena workgroup with a 1 GB scan cutoff, all checked by guardrail tests
-- **Owner window and teardown tooling**: PowerShell scripts for the owner to deploy, run and verify the stack, then empty the buckets (versions included) and delete it, confirming the stack is gone; five Athena validation queries; evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts
+- λ **Ingest Lambda** — downloads the UCI file, checks its MD5, splits it by month and lands new months in S3 Bronze, with a retry budget that fits the Lambda timeout
+- ⚡ **Spark Silver and Gold** — the same stages in PySpark 4.1.1 (the Spark version in AWS Glue 6.0), proven equal to pandas on all 165,474 clicks
+- 🔖 **Glue job entry point** — job bookmarks pick up only new Bronze files; monthly lake writes are rerun-safe
+- 📦 **Library zip** — a build script packages the pipeline code and SQL for the Glue job
+- 🏗️ **SAM stack** (`infra/t1-lake`), all checked by guardrail tests:
+  - four private SSE-S3 buckets
+  - the ingest Lambda (concurrency cap as a deploy parameter, off by default because this account's Lambda quota is 10; GAPS G-18)
+  - a Glue 6.0 FLEX job with a 15-minute timeout
+  - 13 Glue Catalog tables with partition projection
+  - an Athena workgroup with a 1 GB scan cutoff
+- 🧰 **Owner window and teardown tooling**:
+  - PowerShell scripts for the owner to deploy, run and verify the stack, then empty the buckets (versions included) and delete it, confirming the stack is gone
+  - five Athena validation queries
+  - evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts
 
-**🔜 Planned**
+### 🔜 Planned
 
-- **T1a deploy**: one owner-run AWS window with the tooling above (Lambda → S3 → Glue → Glue Catalog → Athena), then verified teardown
-- **T2**: orchestration, data-quality alerts, monitoring
-- **T3 + T4**: one streaming window (Kinesis → Firehose) and one Redshift Serverless window
-- **T5**: Streamlit dashboard, local on Athena and published on a snapshot
+- ☁️ **T1a deploy** — one owner-run AWS window with the tooling above (Lambda → S3 → Glue → Glue Catalog → Athena), then verified teardown
+- 🔔 **T2** — orchestration, data-quality alerts, monitoring
+- 🌊 **T3 + T4** — one streaming window (Kinesis → Firehose) and one Redshift Serverless window
+- 📈 **T5** — Streamlit dashboard, local on Athena and published on a snapshot
 
-**🧭 Engineering principles**
+### 🧭 Engineering principles
 
-- **Research first**: every claim in the original brief is re-verified and logged in [`docs/GAPS.md`](docs/GAPS.md) before adoption
-- **Measured results only**: no number is reported unless it came from a real run
-- **Decisions on record**: five accepted ADRs and a cost-tier annex in [`docs/adr/`](docs/adr/)
-- **Cost-disciplined and public-safe**: every tier priced in rupees first, torn down after use, placeholders for every account identifier
+- 🔍 **Research first** — every claim in the original brief is re-verified and logged in [`docs/GAPS.md`](docs/GAPS.md) before adoption
+- 📏 **Measured results only** — no number is reported unless it came from a real run
+- 📝 **Decisions on record** — five accepted ADRs and a cost-tier annex in [`docs/adr/`](docs/adr/)
+- 💰 **Cost-disciplined and public-safe** — every tier priced in rupees first, torn down after use, placeholders for every account identifier
 
 ---
 
@@ -89,19 +102,19 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 
 | Layer | Tool | Purpose |
 |---|---|---|
-| 🐍 Language | Python 3.11 | Pipeline code |
-| 🐼 Local processing | pandas 2.3 + NumPy | Local twin transformations and seeded enrichment |
-| ⚡ Distributed processing | PySpark 4.1.1 (same as AWS Glue 6.0), Java 17/21 | Spark Silver/Gold job for Glue, checked row-for-row against pandas on the full file |
-| 🗄️ Storage format | Apache Parquet (pyarrow 16.1) | Columnar files, partitioned by month |
-| 🦆 Local SQL engine | DuckDB 1.5 | Runs the summary SQL (the same files are meant for Athena and Redshift) |
-| 🕒 Timezones | zoneinfo + tzdata | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 Testing | pytest 9 | 138 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
-| 🧹 Linting | ruff (Python), cfn-lint (CloudFormation) | Static checks |
-| ⚙️ CI | GitHub Actions | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
-| ☁️ Cloud (planned) | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
-| 🏗️ Infrastructure as code | AWS SAM + CloudFormation, `cfn-lint` | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
-| 📊 Dashboard (planned) | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
-| 📂 Data | UCI #553 (CC BY 4.0) | Real 2008 clickstream from an online clothing shop |
+| 🐍 **Language** | ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white) | Pipeline code |
+| 🐼 **Local processing** | ![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=flat-square&logo=pandas&logoColor=white) ![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat-square&logo=numpy&logoColor=white) | Local twin transformations and seeded enrichment |
+| ⚡ **Distributed processing** | ![PySpark](https://img.shields.io/badge/PySpark-4.1.1-E25A1C?style=flat-square&logo=apachespark&logoColor=white) ![Java](https://img.shields.io/badge/Java-17%2F21-ED8B00?style=flat-square&logo=openjdk&logoColor=white) | Spark Silver/Gold job for Glue (same PySpark as AWS Glue 6.0), checked row-for-row against pandas on the full file |
+| 🗄️ **Storage format** | ![Parquet](https://img.shields.io/badge/Apache_Parquet-pyarrow_16.1-50ABF1?style=flat-square&logo=apacheparquet&logoColor=white) | Columnar files, partitioned by month |
+| 🦆 **Local SQL engine** | ![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=flat-square&logo=duckdb&logoColor=black) | Runs the summary SQL (the same files are meant for Athena and Redshift) |
+| 🕒 **Timezones** | ![zoneinfo](https://img.shields.io/badge/zoneinfo-tzdata-6C757D?style=flat-square&logo=python&logoColor=white) | Shop local time (Europe/Warsaw), stored in UTC |
+| 🧪 **Testing** | ![pytest](https://img.shields.io/badge/pytest-9-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | 138 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧹 **Linting** | ![ruff](https://img.shields.io/badge/ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black) ![cfn-lint](https://img.shields.io/badge/cfn--lint-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | Static checks for Python and CloudFormation |
+| ⚙️ **CI** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
+| 🏗️ **Infrastructure as code** | ![AWS SAM](https://img.shields.io/badge/AWS_SAM-CloudFormation-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
+| ☁️ **Cloud** ⏳ planned | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | Lambda and Glue code built and tested locally; only the artifacts bucket exists in AWS. See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
+| 📊 **Dashboard** ⏳ planned | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
+| 📂 **Data** | ![UCI](https://img.shields.io/badge/UCI_%23553-CC_BY_4.0-2E7D32?style=flat-square) | Real 2008 clickstream from an online clothing shop |
 
 ---
 
@@ -161,18 +174,18 @@ flowchart LR
 
 | Component | Module | Role |
 |---|---|---|
-| Source reader | `src/clickstream/source_file.py` | Reads the `;`-delimited UCI file and applies plain column names |
-| Enrichment | `src/clickstream/enrichment.py` | `click_id`, `click_time_synthetic`, `device_type_synthetic` |
-| Bronze | `src/clickstream/bronze.py` | Adds `received_time`, `data_source`; optional resends |
-| Silver | `src/clickstream/silver.py` | Deduplication, hard quality rules, decoding |
-| Gold | `src/clickstream/gold.py` | Star schema with click and visit grains |
-| Summaries | `sql/summaries/*.sql` + `summaries.py` | Dashboard queries run in DuckDB |
-| Runner | `src/clickstream/local_run.py` | End-to-end local run writing Parquet and the report |
-| Spark stages | `src/clickstream_spark/` | Source, enrichment, Bronze, Silver, Gold, summaries, quality and lake storage in PySpark |
-| Ingest Lambda | `lambdas/ingest_source/handler.py` | Downloads, verifies and lands the UCI file in S3 Bronze by month |
-| Glue job | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks; Glue 6.0, G.1X × 2 workers, Flex, 15-minute timeout, monthly dynamic partition overwrite |
-| Glue Catalog + projection | `infra/t1-lake/template.yaml` | 13 tables defined in the template; Athena partition projection means no crawler and no repair step |
-| Athena workgroup | `infra/t1-lake/template.yaml` | Enforced settings, SSE-S3 results that expire after 1 day, 1 GB scan cutoff per query |
+| 📄 **Source reader** | `src/clickstream/source_file.py` | Reads the `;`-delimited UCI file and applies plain column names |
+| 🏷️ **Enrichment** | `src/clickstream/enrichment.py` | `click_id`, `click_time_synthetic`, `device_type_synthetic` |
+| 🥉 **Bronze** | `src/clickstream/bronze.py` | Adds `received_time`, `data_source`; optional resends |
+| 🥈 **Silver** | `src/clickstream/silver.py` | Deduplication, hard quality rules, decoding |
+| 🥇 **Gold** | `src/clickstream/gold.py` | Star schema with click and visit grains |
+| 📊 **Summaries** | `sql/summaries/*.sql` + `summaries.py` | Dashboard queries run in DuckDB |
+| ▶️ **Runner** | `src/clickstream/local_run.py` | End-to-end local run writing Parquet and the report |
+| ⚡ **Spark stages** | `src/clickstream_spark/` | Source, enrichment, Bronze, Silver, Gold, summaries, quality and lake storage in PySpark |
+| λ **Ingest Lambda** | `lambdas/ingest_source/handler.py` | Downloads, verifies and lands the UCI file in S3 Bronze by month |
+| 🔖 **Glue job** | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks; Glue 6.0, G.1X × 2 workers, Flex, 15-minute timeout, monthly dynamic partition overwrite |
+| 🗂️ **Glue Catalog + projection** | `infra/t1-lake/template.yaml` | 13 tables defined in the template; Athena partition projection means no crawler and no repair step |
+| 🔎 **Athena workgroup** | `infra/t1-lake/template.yaml` | Enforced settings, SSE-S3 results that expire after 1 day, 1 GB scan cutoff per query |
 
 | Tier | Scope | Status |
 |---|---|---|
