@@ -27,8 +27,15 @@ Constraints that shaped the choices:
 - **Cost stays small and capped.** The whole tier is estimated at about ₹12
   per proof run (annex to ADR-0001), so a runaway job is the main risk.
 
-Nothing in this ADR has run on AWS yet. Items that only a real run can settle
-are logged in `docs/GAPS.md`.
+Nothing in this ADR had run on AWS when it was accepted. Items that only a
+real run can settle are logged in `docs/GAPS.md`.
+
+**Follow-up, 2026-10-19 (first AWS run; the decision text below is
+unchanged):** the design ran as written on Glue 6.0 in `ap-south-1`, so the
+5.1 fallback was not needed (G-16); the Glue role was sufficient, bookmark
+included (G-17); the bookmark proof and Athena checks passed (masked evidence
+in `evidence/t1a/2026-10-19/`). Still unverified: the minimum worker count
+(G-15).
 
 ## Decision
 

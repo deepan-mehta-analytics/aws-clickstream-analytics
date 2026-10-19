@@ -407,6 +407,9 @@ not the 151,326 clicks it had already processed.
 |---|---|---|---|---|
 | 24,026 | 14,504 | 9,125 | 4,779 | 1,631 |
 
+Identical from the local twin's DuckDB and from Athena over the AWS Gold
+tables ([`athena/05_visit_depth_funnel.json`](evidence/t1a/2026-10-19/athena/05_visit_depth_funnel.json)).
+
 ### ⏱️ Runtimes (single runs, not averages)
 
 | Run | What it did | Duration |
