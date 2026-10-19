@@ -52,6 +52,13 @@ def test_glue_arguments_match_the_script():                             # templa
     assert given == wanted                                              # nothing missing
 
 
+def test_glue_script_asks_for_no_reserved_argument():                   # awsglue registers these itself; asking again crashes argparse
+    script = ast.parse((REPO / "glue" / "build_silver_gold.py").read_text(encoding="utf-8"))  # the Glue script
+    names = next(node.args[1] for node in ast.walk(script) if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "getResolvedOptions")  # its argument list
+    reserved = {"JOB_ID", "JOB_RUN_ID", "SECURITY_CONFIGURATION", "job-bookmark-option", "continuation-option", "encryption-type", "TempDir", "RedshiftTempDir"}  # awsglue/utils.py getResolvedOptions, aws-glue-libs master, read 2026-10-19
+    assert {element.value for element in names.elts} & reserved == set()  # "conflicting option string: --JOB_RUN_ID" on the first real run, 2026-10-19
+
+
 def test_lambda_settings():                                             # runtime and cap
     function = RESOURCES["IngestFunction"]["Properties"]                # function settings
     assert (function["Runtime"], function["Architectures"], function["MemorySize"], function["Timeout"]) == ("python3.13", ["arm64"], 512, 60)  # as the spec says

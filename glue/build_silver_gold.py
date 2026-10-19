@@ -16,7 +16,7 @@ from clickstream_spark.sql_files import load_summary_sql                # summar
 from clickstream_spark.storage import LakePaths, run_increment          # the work
 
 # ── Arguments and session ─────────────────────────────────────
-args = getResolvedOptions(sys.argv, ["JOB_NAME", "JOB_RUN_ID", "bronze_path", "silver_path", "gold_path", "reports_bucket"])  # full names (Glue 6.0: no prefix matching)
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "bronze_path", "silver_path", "gold_path", "reports_bucket"])  # full names (Glue 6.0: no prefix matching); JOB_RUN_ID is reserved, awsglue adds it to args itself
 glue = GlueContext(SparkContext.getOrCreate())                          # Glue context
 spark = glue.spark_session                                              # Spark session
 for key, value in SPARK_SETTINGS.items():                               # UTC, ANSI, dynamic overwrite...
