@@ -1,0 +1,95 @@
+{
+  "ResultSet": {
+    "Rows": [
+      {
+        "Data": [
+          {
+            "VarCharValue": "source_month"
+          },
+          {
+            "VarCharValue": "row_count"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-04"
+          },
+          {
+            "VarCharValue": "48199"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-05"
+          },
+          {
+            "VarCharValue": "35654"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-06"
+          },
+          {
+            "VarCharValue": "32242"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-07"
+          },
+          {
+            "VarCharValue": "35231"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-08"
+          },
+          {
+            "VarCharValue": "14148"
+          }
+        ]
+      }
+    ],
+    "ResultSetMetadata": {
+      "ColumnInfo": [
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "source_month",
+          "Label": "source_month",
+          "Type": "varchar",
+          "Precision": 2147483647,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": true
+        },
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "row_count",
+          "Label": "row_count",
+          "Type": "bigint",
+          "Precision": 19,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": false
+        }
+      ]
+    }
+  },
+  "UpdateCount": 0
+}

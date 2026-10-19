@@ -126,6 +126,17 @@ class and the 15-minute timeout in [ADR-0005](adr/0005-t1-batch-lake-design.md)
 are not separately priced here. The measured cost replaces this line after
 the first window.
 
+**Measured usage, window of 2026-10-19** (from the masked evidence in
+[`evidence/t1a/2026-10-19/`](../evidence/t1a/2026-10-19/); cost still to be
+read in Cost Explorer):
+
+| Item | Measured |
+|---|---|
+| Glue 6.0 Flex runs | 3: one failed after 39 s (a script bug, fixed in `0c73706`), then two successes of 145 s and 149 s |
+| Glue DPU-seconds | Failed run 60. Successful runs: 291 and 299 in the window's evidence; 237 and 226 when `aws glue get-job-runs` was read after the window ended. The two readings disagree and the billed figure will settle it |
+| Athena data scanned | 6.5 MB for the Bronze CSV count; 0 bytes for the Silver and Gold counts (Parquet row counts come from file metadata); 113 bytes for the funnel query |
+| Lambda | The earlier, failed try wrote April–July to Bronze; the successful window's 2 invocations skipped those 4 months and wrote August |
+
 ### C. BI layer (either path)
 
 | Option | Estimate |
@@ -207,4 +218,4 @@ first cloud run.
 |---|---|---|---|---|
 | 2026-09-25 | None: tier T0 local twin ran on a laptop | Nothing to tear down | — | ₹0 AWS cost |
 | 2026-10-05 | `clickstream-foundation` (artifacts bucket, ~35 KB of code); two attempts at `clickstream-t1-lake`, both failed during creation (Lambda concurrency quota of 10; Glue disabled for the account, GAPS G-18, G-19) | Both T1a attempts rolled back automatically and the stacks were deleted; the foundation bucket stays (objects expire after 30 days); `aws logout` | `aws cloudformation wait stack-delete-complete` returned with no error after each delete | _pending: read in Cost Explorer after 1–2 days_ |
-| _pending_ | _T1a window (Task 13), rerun once AWS Support enables Glue_ | | | |
+| 2026-10-19 | `clickstream-t1-lake` (4 buckets, Lambda, Glue job, 13 catalog tables, Athena workgroup, 3 log groups), after AWS Support enabled Glue and raised the Lambda quota to 1,000 (G-18, G-19); 3 Glue runs, 2 ingest invocations, 5 Athena queries | `t1a-teardown.ps1` emptied the four buckets, `sam delete` removed the stack and the uploaded code, the shared `/aws-glue/jobs/logs-v2` group set to 1-day retention; `aws logout` | Read-only listing afterwards: stack "does not exist"; no Lambda functions, Glue jobs or Glue databases; only the default `primary` Athena workgroup; the one Glue log group holds 0 bytes | _pending: read in Cost Explorer after 1–2 days_ |

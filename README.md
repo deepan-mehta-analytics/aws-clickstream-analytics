@@ -16,23 +16,24 @@ and which products make them leave after one click.
 #### 🏗️ The pipeline
 
 - 🥇 **Layered Bronze → Silver → Gold pipeline** with **data-quality checks at every step**; rejected clicks are kept with a reason, never silently dropped
-- 💻 **Runs fully on a laptop today** — the "local twin" (tier T0), with **every count checked against the real file**
-- ⚡ **Spark matches pandas on every one of the 165,474 clicks** — the **Spark job for AWS Glue** and the **ingest Lambda** are written and tested locally
+- 💻 **Runs fully on a laptop** — the "local twin" (tier T0), with **every count checked against the real file**
+- ⚡ **Spark matches pandas on every one of the 165,474 clicks** — the same stages run as a **Spark job on AWS Glue**
 
 #### ☁️ The AWS path (Mumbai region)
 
-- 💰 **Priced before it's built** — the AWS version is being built in small tiers, each priced in rupees first
-- 🧱 **Infrastructure as code** — an AWS SAM + CloudFormation stack, checked by guardrail tests
-- 🚧 **First window (2026-10-05)** — created only a small artifacts bucket; the T1a stack rolled back on two account-level limits, and AWS Support is enabling Glue for the account
-- 🧹 **Torn down after use** — every cloud resource will be removed after its window, so the project costs nothing per month once it is published
+- ✅ **Core lake run on AWS (2026-10-19)** — **Lambda → S3 → Glue 6.0 Spark → Glue Data Catalog → Athena**; Athena's counts matched the local twin on **all 4 checks**, and the **job bookmark** made the second Glue run read only the new month
+- 💰 **Priced before it's built** — the AWS version is built in small tiers, each priced in rupees first
+- 🧱 **Infrastructure as code** — an AWS SAM + CloudFormation stack, checked by guardrail tests and deployed through a reviewed change set
+- 🧹 **Torn down after use** — the T1a stack was deleted the same day and checked gone, so the project costs nothing per month between windows
 
 ---
 
 ## 🏷️ Project Badges
 
-[![AWS](https://img.shields.io/badge/AWS-Mumbai_(planned)-FF9900?style=for-the-badge&logo=amazonwebservices&logoColor=white)](docs/adr/0001-ingest-and-warehouse-stack.md)
-[![AWS Glue](https://img.shields.io/badge/AWS_Glue-6.0_job_(built_locally)-8C4FFF?style=for-the-badge&logo=amazonwebservices&logoColor=white)](glue/README.md)
-[![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-Ingest_(built_locally)-FF9900?style=for-the-badge&logo=awslambda&logoColor=white)](lambdas/README.md)
+[![AWS](https://img.shields.io/badge/AWS-Mumbai_(T1a_run)-FF9900?style=for-the-badge&logo=amazonwebservices&logoColor=white)](docs/adr/0001-ingest-and-warehouse-stack.md)
+[![AWS Glue](https://img.shields.io/badge/AWS_Glue-6.0_job_(run_on_AWS)-8C4FFF?style=for-the-badge&logo=amazonwebservices&logoColor=white)](glue/README.md)
+[![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-Ingest_(run_on_AWS)-FF9900?style=for-the-badge&logo=awslambda&logoColor=white)](lambdas/README.md)
+[![Amazon Athena](https://img.shields.io/badge/Amazon_Athena-4%2F4_checks_matched-232F3E?style=for-the-badge&logo=amazonwebservices&logoColor=white)](evidence/t1a/2026-10-19/comparison.json)
 [![AWS SAM](https://img.shields.io/badge/IaC-SAM_%2B_CloudFormation-FF4F8B?style=for-the-badge&logo=amazonwebservices&logoColor=white)](docs/adr/0004-iac-sam-cloudformation.md)
 [![Apache Spark](https://img.shields.io/badge/PySpark-4.1.1-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)](https://spark.apache.org/)
 [![Parquet](https://img.shields.io/badge/Storage-Parquet-50ABF1?style=for-the-badge&logo=apacheparquet&logoColor=white)](https://parquet.apache.org/)
@@ -40,10 +41,10 @@ and which products make them leave after one click.
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![pytest](https://img.shields.io/badge/pytest-138_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
+[![pytest](https://img.shields.io/badge/pytest-139_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/Status-T0_Verified_·_T1a_In_Development-yellow?style=for-the-badge)](PROJECT-STATUS.md)
-[![Exam coverage](https://img.shields.io/badge/DEA--C01-8%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
+[![Status](https://img.shields.io/badge/Status-T0_·_T1a_Verified_on_AWS-brightgreen?style=for-the-badge)](PROJECT-STATUS.md)
+[![Exam coverage](https://img.shields.io/badge/DEA--C01-26%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
@@ -51,7 +52,7 @@ and which products make them leave after one click.
 ## 📌 Project Overview
 
 This project implements **a medallion-architecture clickstream pipeline with a
-two-grain star schema**, designed for AWS and built and tested locally first.
+two-grain star schema**, built and tested locally first, then run on AWS.
 
 It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive.ics.uci.edu/dataset/553/clickstream+data+for+online+shopping)
 (CC BY 4.0).
@@ -65,26 +66,26 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 - 🏷️ **Labelled synthetic enrichment** — the source has dates but no time of day or device, so these are generated from a fixed seed in columns ending `_synthetic`
 - 🧮 **Reconciliation against measured facts** — a test runs the real file end to end and checks every count against the numbers measured from the source
 
-### 🧱 Built and tested locally, not deployed (tier T1a: core lake)
+### ✅ Run on AWS and verified (tier T1a: core lake, 2026-10-19)
 
-- λ **Ingest Lambda** — downloads the UCI file, checks its MD5, splits it by month and lands new months in S3 Bronze, with a retry budget that fits the Lambda timeout
+- λ **Ingest Lambda** — downloads the UCI file, checks its MD5, splits it by month and lands new months in S3 Bronze, with a retry budget that fits the Lambda timeout; months already in Bronze are skipped
 - ⚡ **Spark Silver and Gold** — the same stages in PySpark 4.1.1 (the Spark version in AWS Glue 6.0), proven equal to pandas on all 165,474 clicks
-- 🔖 **Glue job entry point** — job bookmarks pick up only new Bronze files; monthly lake writes are rerun-safe
+- 🔖 **Glue job with bookmarks** — the second run read only the 14,148 new August clicks; monthly lake writes are rerun-safe
 - 📦 **Library zip** — a build script packages the pipeline code and SQL for the Glue job
 - 🏗️ **SAM stack** (`infra/t1-lake`), all checked by guardrail tests:
   - four private SSE-S3 buckets
-  - the ingest Lambda (concurrency cap as a deploy parameter, off by default because this account's Lambda quota is 10; GAPS G-18)
+  - the ingest Lambda, reserved concurrency 1 (a deploy parameter, because the account's quota started at 10; GAPS G-18)
   - a Glue 6.0 FLEX job with a 15-minute timeout
   - 13 Glue Catalog tables with partition projection
   - an Athena workgroup with a 1 GB scan cutoff
 - 🧰 **Owner window and teardown tooling**:
   - PowerShell scripts for the owner to deploy, run and verify the stack, then empty the buckets (versions included) and delete it, confirming the stack is gone
   - five Athena validation queries
-  - evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts
+  - evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts ([`evidence/t1a/2026-10-19/`](evidence/t1a/2026-10-19/))
 
 ### 🔜 Planned
 
-- ☁️ **T1a deploy** — one owner-run AWS window with the tooling above (Lambda → S3 → Glue → Glue Catalog → Athena), then verified teardown
+- 🧊 **T1b–T1d** — Iceberg Silver, ingest extras, evidence pass
 - 🔔 **T2** — orchestration, data-quality alerts, monitoring
 - 🌊 **T3 + T4** — one streaming window (Kinesis → Firehose) and one Redshift Serverless window
 - 📈 **T5** — Streamlit dashboard, local on Athena and published on a snapshot
@@ -108,11 +109,12 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 | 🗄️ **Storage format** | ![Parquet](https://img.shields.io/badge/Apache_Parquet-pyarrow_16.1-50ABF1?style=flat-square&logo=apacheparquet&logoColor=white) | Columnar files, partitioned by month |
 | 🦆 **Local SQL engine** | ![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=flat-square&logo=duckdb&logoColor=black) | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | 🕒 **Timezones** | ![zoneinfo](https://img.shields.io/badge/zoneinfo-tzdata-6C757D?style=flat-square&logo=python&logoColor=white) | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 **Testing** | ![pytest](https://img.shields.io/badge/pytest-9-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | 138 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧪 **Testing** | ![pytest](https://img.shields.io/badge/pytest-9-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | 139 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
 | 🧹 **Linting** | ![ruff](https://img.shields.io/badge/ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black) ![cfn-lint](https://img.shields.io/badge/cfn--lint-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | Static checks for Python and CloudFormation |
 | ⚙️ **CI** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | 🏗️ **Infrastructure as code** | ![AWS SAM](https://img.shields.io/badge/AWS_SAM-CloudFormation-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
-| ☁️ **Cloud** ⏳ planned | AWS Mumbai: Lambda, S3, Glue, Athena, Kinesis, Firehose, Redshift Serverless | Lambda and Glue code built and tested locally; only the artifacts bucket exists in AWS. See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
+| ☁️ **Cloud lake** | ![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-FF9900?style=flat-square&logo=awslambda&logoColor=white) ![Amazon S3](https://img.shields.io/badge/Amazon_S3-569A31?style=flat-square&logo=amazons3&logoColor=white) ![AWS Glue](https://img.shields.io/badge/AWS_Glue_6.0-8C4FFF?style=flat-square&logo=amazonwebservices&logoColor=white) ![Amazon Athena](https://img.shields.io/badge/Amazon_Athena-232F3E?style=flat-square&logo=amazonwebservices&logoColor=white) | Tier T1a in Mumbai, run on 2026-10-19 and torn down the same day ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md)) |
+| 🌊 **Streaming and warehouse** ⏳ planned | AWS Mumbai: Kinesis, Firehose, Redshift Serverless | One window each, priced first. See [ADR-0001](docs/adr/0001-ingest-and-warehouse-stack.md) |
 | 📊 **Dashboard** ⏳ planned | Streamlit | Local on Athena, published on a data snapshot ([ADR-0002](docs/adr/0002-dashboard-streamlit.md)) |
 | 📂 **Data** | ![UCI](https://img.shields.io/badge/UCI_%23553-CC_BY_4.0-2E7D32?style=flat-square) | Real 2008 clickstream from an online clothing shop |
 
@@ -146,7 +148,7 @@ flowchart LR
         ENR --> B0 --> S0 --> G0 --> SUM
     end
 
-    subgraph T1A["☁️ AWS Mumbai · tier T1a (code built, not deployed)"]
+    subgraph T1A["☁️ AWS Mumbai · tier T1a (run 2026-10-19, torn down)"]
         direction LR
         LAM["λ ingest Lambda<br/>MD5 check, split by month"]
         S3B[("🥉 S3 Bronze<br/>monthly files")]
@@ -163,14 +165,12 @@ flowchart LR
     S3G -.-> RS["Redshift Serverless window"]
 
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-    classDef built fill:#fff8e1,stroke:#f9a825,color:#6d4c00
     classDef planned fill:#f5f5f5,stroke:#999,stroke-dasharray:4 3,color:#666
-    class ENR,B0,S0,G0,SUM done
-    class LAM,S3B,GLUE,S3G,CAT built
+    class ENR,B0,S0,G0,SUM,LAM,S3B,GLUE,S3G,CAT done
     class DASH,STREAM,RS planned
 ```
 
-*Green is verified on the full file; amber is written and tested locally but not deployed; dashed nodes are planned tiers.*
+*Green is verified on the full file (locally for T0, on AWS for T1a); dashed nodes are planned tiers.*
 
 | Component | Module | Role |
 |---|---|---|
@@ -191,7 +191,7 @@ flowchart LR
 |---|---|---|
 | 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0005 accepted; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
-| T1a | Core lake: Lambda → S3 → Glue → Athena | 🔄 Code, SAM stack and owner window/teardown tooling built and tested locally, with public docs and ADR-0005 written (12 of 14 plan tasks); not deployed |
+| T1a | Core lake: Lambda → S3 → Glue → Athena | ✅ Run on AWS 2026-10-19: 4 of 4 Athena checks matched the local twin, bookmark proven; torn down the same day |
 | T1b–T1d | Iceberg Silver, ingest extras, evidence pass | ⏳ |
 | T2 | Orchestration, data-quality alerts, monitoring | ⏳ |
 | T3 + T4 | Streaming window + Redshift Serverless window | ⏳ |
@@ -226,18 +226,18 @@ aws-clickstream-analytics/
 │   ├── storage.py                   ← rerun-safe monthly lake writes
 │   └── pipeline.py                  ← assembles the whole run
 │
-├── lambdas/ingest_source/handler.py ← ingest Lambda: download, MD5 check, land by month (not deployed)
-├── glue/build_silver_gold.py        ← Glue 6.0 job entry point with bookmarks (not deployed)
+├── lambdas/ingest_source/handler.py ← ingest Lambda: download, MD5 check, land by month
+├── glue/build_silver_gold.py        ← Glue 6.0 job entry point with bookmarks
 ├── scripts/build_glue_libs.py       ← builds the library zip the Glue job imports
 ├── scripts/t1a-*.ps1                ← owner-run T1a window, Glue code upload and verified teardown (never run by CI or agents)
 ├── scripts/t1a_evidence.py          ← expected counts, evidence masking and comparison for the T1a window
 ├── sql/validation/t1a/              ← 5 Athena queries that check the deployed lake against expected counts
-├── evidence/                        ← masked evidence from owner windows (README only until T1a runs)
+├── evidence/                        ← masked evidence per owner window; t1a/2026-10-19/ holds the run log, Athena results and comparison
 ├── sql/summaries/                   ← 4 dashboard queries, portable to Athena/Redshift
 ├── infra/foundation/template.yaml   ← artifacts-bucket stack (owner-deployed only)
-├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup (not deployed)
+├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup
 │
-├── tests/                           ← 138 pytest tests (see tests/README.md)
+├── tests/                           ← 139 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                         ← ADRs 0001–0005 (all accepted) + cost-tier annex
@@ -300,17 +300,22 @@ local-only files tracked) and a **test** job (Python 3.11, Java 17, ruff,
 cfn-lint, pytest). It downloads the dataset and checks its MD5 first, so the
 full-file and pandas-vs-Spark tests run for real there.
 
-### ☁️ Option 4: Tier T1a on AWS (owner only, first attempt 2026-10-05)
+### ☁️ Option 4: Tier T1a on AWS (owner only, run on 2026-10-19)
 
 Only the account owner runs these steps; no agent or CI job holds AWS
-credentials. Steps 1–5 were run on 2026-10-05 (the stack creation rolled
-back, GAPS G-18, G-19); steps 6–7 have not run yet. Every value in angle
-brackets is a placeholder. Full detail is in [`infra/README.md`](infra/README.md).
+credentials. All eight steps ran on 2026-10-19 (an earlier attempt on
+2026-10-05 stopped on two account-level limits, since lifted by AWS: GAPS
+G-18, G-19). Run them in PowerShell 7 from the repo root, not in Git Bash:
+`sam` is `sam.cmd` on Windows, and the scripts use paths relative to the repo
+root. Every value in angle brackets is a placeholder. Full detail is in
+[`infra/README.md`](infra/README.md).
 
 0. Pre-flight checklist in [`infra/README.md`](infra/README.md): an AWS
    Budgets alert exists, the console is on Mumbai, and no unmasked
    screenshots go into the repo. Do not start until it is all ticked.
-1. Sign in for the window only: `aws login --region ap-south-1`.
+1. Sign in for the window only, as an IAM user (never root), in an
+   interactive terminal: `aws login --region ap-south-1`. Check with
+   `aws sts get-caller-identity`.
 2. Deploy the foundation stack once (`aws cloudformation deploy` of
    `infra/foundation/template.yaml`) and note its `ArtifactsBucketName` output.
    Copy that value into your local, gitignored `infra/samconfig.toml` (start
@@ -337,7 +342,7 @@ brackets is a placeholder. Full detail is in [`infra/README.md`](infra/README.md
 
 ```bash
 .venv/Scripts/python -m ruff check src tests lambdas scripts glue
-.venv/Scripts/python -m pytest -v        # → 138 passed on Linux CI (134 run, 4 skipped on Windows)
+.venv/Scripts/python -m pytest -v        # → 139 passed on Linux CI (135 run, 4 skipped on Windows)
 .venv/Scripts/cfn-lint
 ```
 
@@ -355,7 +360,7 @@ Windows and run on Linux CI.
 | `test_summaries.py`, `test_local_run.py` | The SQL summaries and the end-to-end local run |
 | `test_full_file.py` | The real file against the measured stats (skipped when the dataset is not downloaded) |
 | `test_infra_templates.py` | Every CloudFormation template: encryption, private buckets, TLS-only policies, safe IAM, no account IDs in any committed file |
-| `test_t1_lake_template.py` | T1a stack: parameters, outputs, Glue arguments, logging, table columns vs the code, partition projection |
+| `test_t1_lake_template.py` | T1a stack: parameters, outputs, Glue arguments (including no argument name that AWS Glue reserves for itself), logging, table columns vs the code, partition projection |
 | `test_ingest_source.py` | Ingest Lambda: month split, MD5 check, retries within the Lambda timeout, skip already-landed months |
 | `test_spark_session.py` | Local Spark session uses the same settings as the AWS Glue 6.0 job |
 | `test_spark_source.py`, `test_spark_silver.py`, `test_spark_gold.py`, `test_spark_pipeline.py` | Each Spark stage matches its pandas twin |
@@ -372,21 +377,29 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 ## 📊 Results / Performance
 
 > **Tier T0 verified on the full UCI file, 2026-09-25**, from a local run.
-> Tier T1a's Spark code was checked against it on 2026-09-28. No AWS metric
-> exists yet; none is reported until measured from a real cloud run.
+> **Tier T1a verified on AWS Mumbai, 2026-10-19**, from one owner-run window
+> (masked evidence in [`evidence/t1a/2026-10-19/`](evidence/t1a/2026-10-19/)).
+> Every number below was measured; the T1a cost is not read yet.
 
-### ✅ Correctness: every count matched the measured source
+### ✅ Correctness: every count matched the measured source, locally and on AWS
 
-| Check | Expected (measured from the file) | Pipeline |
-|---|---|---|
-| Source clicks read | 165,474 | ✅ 165,474 |
-| Clicks rejected by quality rules | 0 | ✅ 0 |
-| Silver clicks | 165,474 | ✅ 165,474 |
-| Visits | 24,026 | ✅ 24,026 |
-| One-click visits (bounces) | 5,042 (≈ 21%) | ✅ 5,042 |
-| Category mismatches reported | 1 (product A18: 937× trousers, 1× skirts) | ✅ 1 |
-| 🔁 Simulated resends removed (every 1,000th click sent twice) | 166 | ✅ 166 |
-| ⚡ Spark vs pandas on the full file: Silver `clicks` and Gold `visits` | identical | ✅ identical |
+| Check | Expected (measured from the file) | Local twin (T0) | AWS (T1a, Glue + Athena) |
+|---|---|---|---|
+| Source clicks read | 165,474 | ✅ 165,474 | ✅ 165,474 (151,326 in run 1 + 14,148 in run 2) |
+| Clicks rejected by quality rules | 0 | ✅ 0 | ✅ 0 |
+| Silver clicks | 165,474 | ✅ 165,474 | ✅ 165,474 |
+| Visits | 24,026 | ✅ 24,026 | ✅ 24,026 |
+| One-click visits (bounces) | 5,042 (≈ 21%) | ✅ 5,042 | ✅ 5,042 |
+| Category mismatches reported | 1 (product A18: 937× trousers, 1× skirts) | ✅ 1 | ✅ 1 |
+| 🔁 Simulated resends removed (every 1,000th click sent twice) | 166 | ✅ 166 | not simulated on AWS |
+| ⚡ Spark vs pandas on the full file: Silver `clicks` and Gold `visits` | identical | ✅ identical | — |
+| 🔎 Athena per-month counts vs expected (Bronze rows, Silver clicks, Gold visits, rejects) | 4 checks | — | ✅ 4 of 4 matched |
+
+### 🔖 Job bookmark proof (T1a)
+
+The window lands April–July and runs Glue, then lands August alone and runs
+Glue again. Run 2 read **only the 14,148 new August clicks** (1,924 visits),
+not the 151,326 clicks it had already processed.
 
 ### 🧭 Browse-depth funnel (visits reaching at least each shop page)
 
@@ -399,7 +412,17 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 | Run | What it did | Duration |
 |---|---|---|
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
-| Full test suite on GitHub Actions | 108–138 tests incl. dataset-backed and Spark tests | 67.8 s – 123.9 s |
+| Full test suite on GitHub Actions | 108–139 tests incl. dataset-backed and Spark tests | 67.8 s – 132.0 s |
+| Glue 6.0 Flex run 1 on AWS (2 G.1X workers) | April–July: 151,326 clicks → Silver and Gold | 145 s |
+| Glue 6.0 Flex run 2 on AWS (2 G.1X workers) | August only, via the bookmark: 14,148 clicks | 149 s |
+
+### 🔎 Athena data scanned (T1a)
+
+| Query | Scanned |
+|---|---|
+| Bronze rows by month (CSV) | 6.5 MB |
+| Silver clicks, Gold visits and rejects by month (Parquet) | 0 bytes each: Parquet keeps row counts in file metadata |
+| Browse-depth funnel (Gold summary) | 113 bytes |
 
 💰 **Cloud cost (estimate, not measured):** about ₹450 one-time for the full
 hybrid build with a local dashboard, and ₹0/month after teardown. The
@@ -407,16 +430,17 @@ Redshift window runs on the Redshift Serverless $300 trial credit (confirmed
 available 2026-10-05); there are no other credits, so the rest is out of
 pocket at list price. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
-annex, not measured).
+annex). Its measured cost will come from Cost Explorer 1–2 days after the
+2026-10-19 window; the measured usage is in [`docs/cost-model.md`](docs/cost-model.md).
 
 ---
 
 ## 🎓 Exam Alignment
 
 This repo doubles as verifiable skills coverage for the **AWS Certified Data
-Engineer – Associate (DEA-C01)** exam guide v1.1: **8 of 120 skills are
-shown** (by the local run and tests), **15 are designed** in ADRs, and **97
-are not started**. The plan covers **103 skills, plus 8 stretch**; the 9 left
+Engineer – Associate (DEA-C01)** exam guide v1.1: **26 of 120 skills are
+shown** (by the local run, the tests and the T1a run on AWS), **8 are
+designed** in ADRs, and **86 are not started**. The plan covers **103 skills, plus 8 stretch**; the 9 left
 out are recorded as accepted limitations. See the full breakdown in
 [`docs/exam-guide-map.md`](docs/exam-guide-map.md). This is a skills coverage
 map, not exam prep, and it is honest by construction: nothing is marked shown
@@ -430,12 +454,14 @@ without a real run behind it.
 - **No checkout or purchase events**: the funnel is a **browse-depth** funnel, not a purchase funnel
 - **Time of day and device are synthetic**: generated from a fixed seed, and labelled `_synthetic` everywhere
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%)
-- **Only the artifacts bucket exists in AWS**: the cloud tiers are designed and priced; the T1a Lambda and Glue code is tested locally only, never run on AWS
-- **Infrastructure as code is written but not deployed**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The foundation (artifacts bucket) and T1a lake templates pass cfn-lint and guardrail tests; the foundation was deployed on 2026-10-05, the T1a lake stack not yet
+- **Only tier T1a has run on AWS**: the streaming, Redshift and dashboard tiers are designed and priced, not built. Between windows only the small artifacts bucket exists
+- **Infrastructure is deployed per window, not left running**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The T1a stack ran for one window on 2026-10-19 and was deleted the same day
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
-- **T1a has not run on AWS yet**: the first deploy attempts (2026-10-05) hit two account-level limits on AWS's side, a 10-unit Lambda concurrency quota (worked around with a parameter) and Glue being disabled for the account (AWS Support case open), and both rolled back cleanly ([`docs/GAPS.md`](docs/GAPS.md) G-18, G-19). Glue 6.0 in Mumbai is inferred from a price-list entry, and the Glue role's permission set and minimum worker count are unverified until the first window ([`docs/GAPS.md`](docs/GAPS.md))
+- **The T1a cost is not measured yet**: it is read from Cost Explorer 1–2 days after the window. The Glue DPU-seconds also differ between two readings (291/299 in the window's evidence, 237/226 from a later API call); the bill will settle it ([`docs/cost-model.md`](docs/cost-model.md))
+- **The first Glue run on AWS failed on a script bug** that local tests could not reach (the `awsglue` library exists only inside Glue): the script asked for an argument Glue reserves for itself. It is fixed and now guarded by a test; the Glue minimum worker count is still unverified ([`docs/GAPS.md`](docs/GAPS.md) G-15)
+- **Encryption in transit is configured but not tested**: the TLS-only bucket policies were deployed, but no plain-HTTP request was tried against them
 - **Single runs only**: runtimes above are one run each, not averages
 - **9 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), schema conversion, two multi-account skills that need AWS Organizations, and CloudTrail Lake (closed to new customers on 2026-05-31) ([`docs/GAPS.md`](docs/GAPS.md) §3)
 
@@ -444,7 +470,7 @@ without a real run behind it.
 ## 🔜 Roadmap
 
 - [x] T0: local twin (Bronze → Silver → Gold → summaries, verified on the full file)
-- [ ] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena): code, SAM stack and owner tooling built and tested locally, 12 of 14 plan tasks done
+- [x] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena), run and torn down on 2026-10-19; measured cost still to be read
 - [ ] T1b–T1d: Iceberg Silver, ingest extras, evidence pass
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window

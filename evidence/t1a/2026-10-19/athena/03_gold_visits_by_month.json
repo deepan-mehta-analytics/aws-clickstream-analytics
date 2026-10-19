@@ -1,0 +1,95 @@
+{
+  "ResultSet": {
+    "Rows": [
+      {
+        "Data": [
+          {
+            "VarCharValue": "visit_month"
+          },
+          {
+            "VarCharValue": "visits"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-04"
+          },
+          {
+            "VarCharValue": "6941"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-05"
+          },
+          {
+            "VarCharValue": "5206"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-06"
+          },
+          {
+            "VarCharValue": "4884"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-07"
+          },
+          {
+            "VarCharValue": "5071"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "2008-08"
+          },
+          {
+            "VarCharValue": "1924"
+          }
+        ]
+      }
+    ],
+    "ResultSetMetadata": {
+      "ColumnInfo": [
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "visit_month",
+          "Label": "visit_month",
+          "Type": "varchar",
+          "Precision": 2147483647,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": true
+        },
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "visits",
+          "Label": "visits",
+          "Type": "bigint",
+          "Precision": 19,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": false
+        }
+      ]
+    }
+  },
+  "UpdateCount": 0
+}

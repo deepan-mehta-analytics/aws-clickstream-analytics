@@ -1,0 +1,97 @@
+{
+  "ingest_1": "{\"months\": {\"2008-04\": {\"rows\": 48199, \"action\": \"skipped (same source file)\"}, \"2008-05\": {\"rows\": 35654, \"action\": \"skipped (same source file)\"}, \"2008-06\": {\"rows\": 32242, \"action\": \"skipped (same source file)\"}, \"2008-07\": {\"rows\": 35231, \"action\": \"skipped (same source file)\"}}}",
+  "glue_run_1": {
+    "CompletedOn": "2026-10-19T11:02:04.123+05:30",
+    "StartedOn": "2026-10-19T10:59:25.235+05:30",
+    "ExecutionTime": 145,
+    "Id": "jr_46ef13667c3cec9ec4fc2939f1128be97964a08cf2d6e20ec2bf4105dc58488e",
+    "DPUSeconds": 291.0,
+    "JobRunState": "SUCCEEDED"
+  },
+  "ingest_2": "{\"months\": {\"2008-08\": {\"rows\": 14148, \"action\": \"written\"}}}",
+  "glue_run_2": {
+    "CompletedOn": "2026-10-19T11:05:12.719+05:30",
+    "StartedOn": "2026-10-19T11:02:36.116+05:30",
+    "ExecutionTime": 149,
+    "Id": "jr_d91934e1cbf135044a75e0ad088f9851a0d2feaffe0bf1cd3603714c4a7d9684",
+    "DPUSeconds": 299.0,
+    "JobRunState": "SUCCEEDED"
+  },
+  "quality_reports": [
+    {
+      "source_rows": 151326,
+      "bronze_rows": 151326,
+      "duplicates_removed": 0,
+      "rejected_rows": 0,
+      "rejections_by_reason": {},
+      "silver_clicks": 151326,
+      "visits": 22102,
+      "one_click_visits": 4670,
+      "category_mismatches": [
+        {
+          "click_id": "uci553-2766-27",
+          "product_code": "A18",
+          "click_category": "skirts",
+          "product_category": "trousers"
+        }
+      ],
+      "status": "ok",
+      "source_months": [
+        "2008-04",
+        "2008-05",
+        "2008-06",
+        "2008-07"
+      ],
+      "total_silver_clicks": 151326,
+      "total_visits": 22102,
+      "job_run_id": "jr_46ef13667c3cec9ec4fc2939f1128be97964a08cf2d6e20ec2bf4105dc58488e",
+      "run_time": "2026-10-19T11:00:26.61548+05:30"
+    },
+    {
+      "source_rows": 14148,
+      "bronze_rows": 14148,
+      "duplicates_removed": 0,
+      "rejected_rows": 0,
+      "rejections_by_reason": {},
+      "silver_clicks": 14148,
+      "visits": 1924,
+      "one_click_visits": 372,
+      "category_mismatches": [],
+      "status": "ok",
+      "source_months": [
+        "2008-08"
+      ],
+      "total_silver_clicks": 165474,
+      "total_visits": 24026,
+      "job_run_id": "jr_d91934e1cbf135044a75e0ad088f9851a0d2feaffe0bf1cd3603714c4a7d9684",
+      "run_time": "2026-10-19T11:03:14.458017+05:30"
+    }
+  ],
+  "athena": [
+    {
+      "engine_ms": 553,
+      "file": "01_bronze_rows_by_month",
+      "scanned_bytes": 6510397
+    },
+    {
+      "engine_ms": 676,
+      "file": "02_silver_clicks_by_month",
+      "scanned_bytes": 0
+    },
+    {
+      "engine_ms": 439,
+      "file": "03_gold_visits_by_month",
+      "scanned_bytes": 0
+    },
+    {
+      "engine_ms": 327,
+      "file": "04_rejected_rows",
+      "scanned_bytes": 0
+    },
+    {
+      "engine_ms": 448,
+      "file": "05_visit_depth_funnel",
+      "scanned_bytes": 113
+    }
+  ]
+}

@@ -8,8 +8,8 @@ wording below is **paraphrased**; the official guide is the authority.
   **version 1.1** (published 2025-12-12), fetched 2026-09-25.
 - **Re-check log:** [`exam-guide-delta.md`](exam-guide-delta.md).
 
-**Coverage: 8 of 120 skills shown (local run, tier T0; no AWS yet) · 15 designed · 97 not started**
-(as of 2026-10-05; the local twin, tier T0, is built and run; ADR-0004 designs the IaC and IAM; no cloud run exists yet).
+**Coverage: 26 of 120 skills shown (local run, tier T0, plus the first AWS run, tier T1a) · 8 designed · 86 not started**
+(as of 2026-10-19; the T1a core lake ran on AWS on 2026-10-19 (Lambda → S3 Bronze → Glue 6.0 Spark → Glue Data Catalog → Athena) and was torn down the same day; masked evidence is in [`evidence/t1a/2026-10-19/`](../evidence/t1a/2026-10-19/)).
 
 **Plan: 103 planned · 8 stretch · 9 not planned.** Planned skills by
 domain: D1 37/37, D2 20/26, D3 27/28, D4 19/29. On 2026-09-26, 26 stretch
@@ -49,8 +49,8 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 1.1.1 | Consume from streaming sources | Planned | Kinesis Data Streams → Firehose in a streaming window | ⬜ |
-| 1.1.2 | Consume from batch sources | Planned | S3 Bronze read by Glue | ⬜ |
-| 1.1.3 | Configure batch ingestion options | Planned | Glue job bookmarks and partition pruning | ⬜ |
+| 1.1.2 | Consume from batch sources | Planned | Glue job reads the S3 Bronze CSV months (T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)) | ✅ |
+| 1.1.3 | Configure batch ingestion options | Planned | Glue job bookmarks: run 2 read only the 14,148 new August clicks after run 1 read April–July (T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)) | ✅ |
 | 1.1.4 | Consume data APIs | Planned | T1: Lambda pulls reference data (for example currency rates) from a free public API into Bronze | ⬜ |
 | 1.1.5 | Schedule jobs and crawlers | Planned | EventBridge schedule for the batch job | ⬜ |
 | 1.1.6 | Trigger on events | Planned | S3 event notification → Lambda | ⬜ |
@@ -69,8 +69,8 @@ Accepted 2026-09-25):
 | 1.2.2 | Connect via JDBC/ODBC | Planned | T4: JDBC connection from a local SQL client to Redshift Serverless | ⬜ |
 | 1.2.3 | Integrate multiple sources | Planned | T1: clickstream joined with the public-API reference data (1.1.4) in Gold | ⬜ |
 | 1.2.4 | Keep processing costs down | Planned | [`cost-model.md`](cost-model.md), ADR-0001 | 🟡 |
-| 1.2.5 | Pick transformation services to fit requirements | Planned | Glue, Lambda, Redshift SQL | ⬜ |
-| 1.2.6 | Convert between formats | Planned | CSV → Parquet at every layer: `src/clickstream/local_run.py` (local run, tier T0); Firehose JSON → Parquet still to come | ✅ |
+| 1.2.5 | Pick transformation services to fit requirements | Planned | Lambda for the small download-and-land step, Glue Spark (Flex) for the batch transform ([ADR-0005](adr/0005-t1-batch-lake-design.md); T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)); Redshift SQL still to come | ✅ |
+| 1.2.6 | Convert between formats | Planned | CSV → Parquet at every layer: `src/clickstream/local_run.py` (local run, tier T0) and the Glue job (T1a run 2026-10-19, [evidence](../evidence/t1a/2026-10-19/)); Firehose JSON → Parquet still to come | ✅ |
 | 1.2.7 | Debug transformation failures and slowness | Planned | Runbook entries from real failures | ⬜ |
 | 1.2.8 | Expose data to other systems as APIs | Planned | T2: HTTP API (API Gateway + Lambda) serving one Athena summary; the workgroup's 1 GB scan cutoff caps abuse. Est. ₹0 | ⬜ |
 | 1.2.9 | Characterise data volume, velocity and variety | Planned | Measured profile in [`data/README.md`](../data/README.md); [data dictionary](data-dictionary.md) | 🟡 |
@@ -90,15 +90,15 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 1.4.1 | Reduce ingest/transform runtime | Planned | T1: measured before/after runtime and bytes scanned (CSV vs Parquet, partition pruning) | ⬜ |
-| 1.4.2 | Tune Lambda concurrency and performance | Planned | T1: memory and timeout on the ingest Lambda; reserved concurrency is the `IngestReservedConcurrency` parameter, shown once the account's 10-unit Lambda quota is raised (GAPS G-18) | ⬜ |
+| 1.4.2 | Tune Lambda concurrency and performance | Planned | Ingest Lambda with set memory and timeout and reserved concurrency 1 via the `IngestReservedConcurrency` parameter, deployed after the account quota was raised to 1,000 (T1a run 2026-10-19, [GAPS G-18](GAPS.md)) | ✅ |
 | 1.4.3 | Use data-engineering languages | Planned | Python package `src/clickstream/` plus SQL in `sql/summaries/` (local run, tier T0) | ✅ |
 | 1.4.4 | Apply software engineering practice | Planned | Git history, 45 pytest tests (TDD), ruff, a quality report; CI defined but not yet run (local run, tier T0) | ✅ |
-| 1.4.5 | Deploy with IaC | Planned | One SAM-extended CloudFormation stack per tier, owner-deployed via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
-| 1.4.6 | Package serverless pipelines with SAM | Planned | `sam build` / `sam deploy` of the tier templates; `sam local invoke` of the ingest Lambda ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 1.4.5 | Deploy with IaC | Planned | SAM-extended CloudFormation stack, deployed by the owner via a reviewed change set ([ADR-0004](adr/0004-iac-sam-cloudformation.md); T1a run 2026-10-19, [teardown log](cost-model.md)) | ✅ |
+| 1.4.6 | Package serverless pipelines with SAM | Planned | `sam build` / `sam deploy --no-execute-changeset` of the T1a template, then `sam delete` in the teardown (T1a run 2026-10-19, [teardown log](cost-model.md)); `sam local invoke` not shown | ✅ |
 | 1.4.7 | Mount storage in Lambda | Planned | T1c: a separate small Lambda in a VPC mounts EFS (S3 gateway endpoint, no NAT gateway). Est. ≈ ₹2 | ⬜ |
-| 1.4.8 | Repeatable deploys with CloudFormation/CDK | Planned | CloudFormation stacks (SAM transform), deployed and deleted per working window ([ADR-0004](adr/0004-iac-sam-cloudformation.md)); CDK rejected | 🟡 |
+| 1.4.8 | Repeatable deploys with CloudFormation/CDK | Planned | CloudFormation stack (SAM transform) created and deleted within one working window, verified gone afterwards (T1a run 2026-10-19, [teardown log](cost-model.md)); CDK rejected | ✅ |
 | 1.4.9 | CI/CD for data pipelines | Planned | GitHub Actions | ⬜ |
-| 1.4.10 | Distributed computing concepts | Planned | Spark in Glue, with a concept note | ⬜ |
+| 1.4.10 | Distributed computing concepts | Planned | Spark on Glue 6.0, 2 G.1X Flex workers (T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)) | ✅ |
 | 1.4.11 | Data structures and algorithms | Planned | T1d: concept note linking the code that uses hash-based dedup, sorting and window functions. ₹0 | ⬜ |
 
 ---
@@ -122,10 +122,10 @@ Accepted 2026-09-25):
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 2.2.1 | Query source data through a catalog | Planned | Athena via Glue Data Catalog | ⬜ |
-| 2.2.2 | Build a technical catalog | Planned | Glue Data Catalog | ⬜ |
+| 2.2.1 | Query source data through a catalog | Planned | Athena queries Bronze, Silver and Gold through the Glue Data Catalog (T1a run 2026-10-19, [Athena results](../evidence/t1a/2026-10-19/athena/)) | ✅ |
+| 2.2.2 | Build a technical catalog | Planned | Glue Data Catalog database with 13 IaC-defined tables, used by Athena (T1a run 2026-10-19, [Athena results](../evidence/t1a/2026-10-19/athena/)) | ✅ |
 | 2.2.3 | Discover schemas with crawlers | Planned | T1: one crawler run on Bronze compared with IaC-defined tables (crawler cost noted) | ⬜ |
-| 2.2.4 | Keep partitions in sync with the catalog | Planned | Athena partition projection on monthly partitions, [ADR-0003](adr/0003-data-model.md) | 🟡 |
+| 2.2.4 | Keep partitions in sync with the catalog | Planned | Athena partition projection on monthly partitions ([ADR-0003](adr/0003-data-model.md)): per-month counts read with no partition registration step (T1a run 2026-10-19, [comparison.json](../evidence/t1a/2026-10-19/comparison.json)) | ✅ |
 | 2.2.5 | Create catalog connections | Stretch | — | ⬜ |
 | 2.2.6 | Business data catalogs | Not planned | Accepted limitation: SageMaker Unified Studio / DataZone has no Mumbai price in the Price List API (2026-10-05) | ⬜ |
 
@@ -161,12 +161,12 @@ Accepted 2026-09-25):
 |---|---|---|---|---|
 | 3.1.1 | Orchestrate pipelines | Planned | Step Functions | ⬜ |
 | 3.1.2 | Troubleshoot managed workflows | Planned | Runbook entries | ⬜ |
-| 3.1.3 | Call AWS SDKs from code | Planned | boto3 event generator | ⬜ |
+| 3.1.3 | Call AWS SDKs from code | Planned | boto3 in the ingest Lambda (S3 checks and writes) and in the Glue job (quality report to S3) (T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)); event generator still to come | ✅ |
 | 3.1.4 | Use service features to process data | Planned | Glue, Redshift | ⬜ |
 | 3.1.5 | Consume and maintain data APIs | Planned | T2: same HTTP API as 1.2.8, called from a script | ⬜ |
 | 3.1.6 | Prepare data with DataBrew / Unified Studio | Planned | T1d: one AWS Glue DataBrew recipe job (jobs only; interactive sessions cost about ₹114 each). Est. ≈ ₹10, minimum billing to verify | ⬜ |
-| 3.1.7 | Query data with Athena | Planned | Athena queries on Silver/Gold | ⬜ |
-| 3.1.8 | Automate processing with Lambda | Planned | Generator and trigger functions | ⬜ |
+| 3.1.7 | Query data with Athena | Planned | Five Athena queries on Bronze, Silver and Gold, results matched against expected counts (T1a run 2026-10-19, [comparison.json](../evidence/t1a/2026-10-19/comparison.json)) | ✅ |
+| 3.1.8 | Automate processing with Lambda | Planned | Ingest Lambda downloads, checks and lands the source in Bronze one month at a time (T1a run 2026-10-19, [window.json](../evidence/t1a/2026-10-19/window.json)); trigger functions still to come | ✅ |
 | 3.1.9 | Manage events and schedules | Planned | EventBridge | ⬜ |
 
 ### Task 3.2: Analyze data
@@ -215,9 +215,9 @@ repo defines roles and policies; the owner applies them.
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 4.1.1 | Update VPC security groups | Stretch | Redshift Serverless workgroup security group | ⬜ |
-| 4.1.2 | Manage IAM groups, roles and endpoints | Planned | IaC-defined roles ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 4.1.2 | Manage IAM groups, roles and endpoints | Planned | IaC-defined roles ([ADR-0004](adr/0004-iac-sam-cloudformation.md)), deployed and used (T1a run 2026-10-19, [GAPS G-17](GAPS.md)) | ✅ |
 | 4.1.3 | Create and rotate credentials in Secrets Manager | Stretch | Secrets Manager cost not yet verified | ⬜ |
-| 4.1.4 | Roles for service access | Planned | Lambda, Glue, Firehose, Redshift roles, one per service ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 4.1.4 | Roles for service access | Planned | One role per service: Lambda and Glue roles deployed and used (T1a run 2026-10-19, [GAPS G-17](GAPS.md)); Firehose and Redshift roles still to come | ✅ |
 | 4.1.5 | Policies on access points and endpoints | Planned | T1: S3 access point for read-only analyst access to Gold | ⬜ |
 | 4.1.6 | Managed vs unmanaged services | Planned | ADR discussion | ⬜ |
 | 4.1.7 | SageMaker Unified Studio domains/projects | Not planned | Accepted limitation: SageMaker Unified Studio is unpriced for Mumbai (2026-10-05) | ⬜ |
@@ -226,12 +226,12 @@ repo defines roles and policies; the owner applies them.
 
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
-| 4.2.1 | Write custom IAM policies | Planned | Scoped IaC policies ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 4.2.1 | Write custom IAM policies | Planned | Scoped inline policies written in the template ([ADR-0004](adr/0004-iac-sam-cloudformation.md)), sufficient for both Glue runs and the bookmark (T1a run 2026-10-19, [GAPS G-17](GAPS.md)) | ✅ |
 | 4.2.2 | Store app and database credentials | Planned | T1: pipeline configuration in SSM Parameter Store (standard parameters) | ⬜ |
 | 4.2.3 | Database users, groups and roles | Planned | Redshift read-only analyst role | ⬜ |
 | 4.2.4 | Permissions via Lake Formation | Planned | T2: Lake Formation grants for a read-only analyst role | ⬜ |
 | 4.2.5 | Role-, tag- and attribute-based access | Planned | T2: Lake Formation tag-based access control (LF-Tags) | ⬜ |
-| 4.2.6 | Least-privilege policies | Planned | Per-service policies scoped to bucket/prefix ARNs, enforced by template tests ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | 🟡 |
+| 4.2.6 | Least-privilege policies | Planned | Per-service policies scoped to bucket/prefix ARNs, enforced by template tests ([ADR-0004](adr/0004-iac-sam-cloudformation.md)); no permission errors in the run (T1a run 2026-10-19, [GAPS G-17](GAPS.md)) | ✅ |
 
 ### Task 4.3: Encryption and masking
 
@@ -240,7 +240,7 @@ repo defines roles and policies; the owner applies them.
 | 4.3.1 | Mask and anonymise data | Planned | Hashed user IDs | ⬜ |
 | 4.3.2 | Encrypt with KMS keys | Stretch | SSE-S3 chosen; KMS key rejected for cost and deletion wait ([ADR-0004](adr/0004-iac-sam-cloudformation.md)) | ⬜ |
 | 4.3.3 | Cross-account encryption | Not planned | Accepted limitation: needs AWS Organizations and a second account, an owner-only governance change (cost is not the blocker) | ⬜ |
-| 4.3.4 | Encryption in transit | Planned | TLS-only bucket policy | ⬜ |
+| 4.3.4 | Encryption in transit | Planned | TLS-only bucket policy deployed on all four T1a buckets (T1a run 2026-10-19); a refused plain-HTTP request not yet tested | 🟡 |
 
 ### Task 4.4: Logs for audit
 

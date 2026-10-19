@@ -1,0 +1,55 @@
+{
+  "ResultSet": {
+    "Rows": [
+      {
+        "Data": [
+          {
+            "VarCharValue": "scope"
+          },
+          {
+            "VarCharValue": "rejected"
+          }
+        ]
+      },
+      {
+        "Data": [
+          {
+            "VarCharValue": "all"
+          },
+          {
+            "VarCharValue": "0"
+          }
+        ]
+      }
+    ],
+    "ResultSetMetadata": {
+      "ColumnInfo": [
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "scope",
+          "Label": "scope",
+          "Type": "varchar",
+          "Precision": 3,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": true
+        },
+        {
+          "CatalogName": "hive",
+          "SchemaName": "",
+          "TableName": "",
+          "Name": "rejected",
+          "Label": "rejected",
+          "Type": "bigint",
+          "Precision": 19,
+          "Scale": 0,
+          "Nullable": "UNKNOWN",
+          "CaseSensitive": false
+        }
+      ]
+    }
+  },
+  "UpdateCount": 0
+}

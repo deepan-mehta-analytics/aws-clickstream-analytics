@@ -82,7 +82,7 @@ in [`docs/cost-model.md`](../docs/cost-model.md).
 Run the commands in this order from the repository root, in PowerShell 7.3 or
 later. Values in angle brackets are placeholders; the real values come from
 your stack outputs and stay out of the repository. The scripts are described
-in [`scripts/README.md`](../scripts/README.md). Steps 1–5 were run on 2026-10-05; step 5's stack creation stopped on account-level limits (see below), so steps 6–7 have not run yet.
+in [`scripts/README.md`](../scripts/README.md). Every step ran on 2026-10-19 (an attempt on 2026-10-05 stopped at step 5 on account-level limits, see below). Use a PowerShell 7 window, not Git Bash: `sam` is `sam.cmd` on Windows, and the scripts' paths are relative to the repository root. Run `aws login` in an interactive window as the IAM user (never root): it waits for the browser and may ask a y/n question.
 
 **Pre-flight: do not start the window until every box is ticked.**
 
@@ -141,8 +141,9 @@ aws logout
 
 If the first deploy fails with "decreases account's UnreservedConcurrentExecution
 below its minimum value", the account's Lambda concurrency quota is reduced
-(10 on this account, GAPS G-18). The template's `IngestReservedConcurrency`
-parameter defaults to 0 (no reservation) for that reason. A stack left in
+(this account started at 10, GAPS G-18). The template's `IngestReservedConcurrency`
+parameter defaults to 0 (no reservation) for that reason; once AWS raises the
+quota (to 1,000 here, 2026-10-19), deploy with `IngestReservedConcurrency=1`. A stack left in
 `ROLLBACK_COMPLETE` must be deleted (`aws cloudformation delete-stack`, then
 `aws cloudformation wait stack-delete-complete`) before deploying again.
 
