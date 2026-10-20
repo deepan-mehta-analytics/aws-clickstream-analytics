@@ -71,11 +71,17 @@ def pick_visit(source: Path, seed: int = DEFAULT_SEED) -> tuple[int, str]:  # (v
 
 
 def filter_visit_lines(raw: bytes, visit_id: int) -> bytes:             # source bytes minus one visit's lines
-    lines = raw.decode("utf-8").splitlines(keepends=True)               # every line with its own ending (CRLF kept)
-    header = lines[0].rstrip("\r\n").split(";")                         # column names
+    lines = raw.splitlines(keepends=True)                               # bytes split only on CR/LF, each line keeps its ending
+    header = lines[0].decode("utf-8-sig").rstrip("\r\n").split(";")     # column names (a leading BOM is ignored)
     position = header.index("session ID")                               # where the visit ID sits
-    kept = [lines[0]] + [line for line in lines[1:] if line.rstrip("\r\n").split(";")[position] != str(int(visit_id))]  # header plus other visits
-    return "".join(kept).encode("utf-8")                                # same bytes apart from the removed lines
+    target = str(int(visit_id)).encode("utf-8")                         # the visit ID as it appears in the file
+
+    def is_visit(line: bytes) -> bool:                                  # does this line belong to the visit?
+        fields = line.rstrip(b"\r\n").split(b";")                       # the line's values
+        return len(fields) > position and fields[position] == target    # blank or short lines are never the visit
+
+    kept = [lines[0]] + [line for line in lines[1:] if not is_visit(line)]  # header plus every other line
+    return b"".join(kept)                                               # same bytes apart from the removed lines
 
 
 def expected_counts_without(source: Path, visit_id: int) -> dict:      # expected_counts minus one visit

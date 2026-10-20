@@ -147,6 +147,13 @@ def test_expected_counts_without_keeps_other_bytes(tmp_path):           # raw li
     assert b";1;1;A1;" not in kept and b";2;1;A1;" in kept              # visit 1 gone, visit 2 kept
 
 
+def test_filter_visit_lines_survives_blank_lines_and_a_bom():           # odd but harmless file shapes
+    crlf = bytes([13, 10])                                              # CR LF line ending
+    raw = b"\xef\xbb\xbfa;session ID" + crlf + b"1;5" + crlf + crlf + b"2;6" + crlf  # BOM header, a blank line inside
+    kept = evidence.filter_visit_lines(raw, 5)                          # drop visit 5
+    assert kept == b"\xef\xbb\xbfa;session ID" + crlf + crlf + b"2;6" + crlf  # only the visit-5 line is gone
+
+
 def test_cli_mask_reads_visit_from_private_file(tmp_path, monkeypatch): # the id is never on the command line
     (tmp_path / "pick.json").write_text(json.dumps({"visit_id": 4321, "month": "2008-04"}), encoding="utf-8")  # private pick
     (tmp_path / "raw.json").write_text(json.dumps({"visit_id": 4321, "row_count": 4321}), encoding="utf-8")  # raw evidence
