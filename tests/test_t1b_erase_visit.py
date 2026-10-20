@@ -20,7 +20,13 @@ KEY = "bronze/source/clicks.csv"                                        # placeh
 
 
 class FakeS3:                                                           # in-memory versioned S3 client that records calls
-    def __init__(self, body: bytes, extra_versions: int = 0, delete_marker: bool = False):  # starting state
+    def __init__(self, body: bytes, extra_versions: int = 0, delete_marker: bool = False, truncated: bool = False, encryption: str = "AES256", put_returns: str | None = None, extra_after_put: bool = False, delete_error: Exception | None = None, swap_after_delete: bool = False):  # starting state and failure switches
+        self.truncated = truncated                                      # listings claim to be cut short
+        self.encryption = encryption                                    # encryption the original object reports
+        self.put_returns = put_returns                                  # VersionId the put reports instead of the stored one
+        self.extra_after_put = extra_after_put                          # a concurrent writer adds a version after the put
+        self.delete_error = delete_error                                # error raised by delete_object
+        self.swap_after_delete = swap_after_delete                      # the surviving version has another id after the delete
         self.calls = []                                                 # ordered call names
         self.counter = 0                                                # version id counter
         self.versions = []                                              # stored versions of KEY, oldest first
@@ -40,23 +46,30 @@ class FakeS3:                                                           # in-mem
     def list_object_versions(self, Bucket, Prefix):                     # real boto3 name and arguments
         self.calls.append("list")                                       # record
         other = {"Key": KEY + ".other", "VersionId": "other-0001"}      # a different key sharing the prefix
-        return {"Versions": [{"Key": v["Key"], "VersionId": v["VersionId"]} for v in self.versions] + [other], "DeleteMarkers": list(self.markers)}  # other key must be filtered out
+        return {"Versions": [{"Key": v["Key"], "VersionId": v["VersionId"]} for v in self.versions] + [other], "DeleteMarkers": list(self.markers), "IsTruncated": self.truncated}  # other key must be filtered out
 
     def get_object(self, Bucket, Key, VersionId=None):                  # read one version
         self.calls.append("get")                                        # record
         version = next(v for v in self.versions if VersionId in (None, v["VersionId"]))  # the requested version
-        return {"Body": io.BytesIO(version["Body"]), "ContentType": version["ContentType"], "Metadata": dict(version["Metadata"])}  # like boto3
+        return {"Body": io.BytesIO(version["Body"]), "ContentType": version["ContentType"], "Metadata": dict(version["Metadata"]), "ServerSideEncryption": self.encryption}  # like boto3
 
     def put_object(self, **kwargs):                                     # upload a new version
         self.calls.append("put")                                        # record
         self.puts.append(kwargs)                                        # keep the arguments
         self._add(kwargs["Body"], kwargs["ContentType"], kwargs["Metadata"])  # becomes a new version
-        return {"VersionId": self.versions[-1]["VersionId"]}            # like boto3
+        stored_id = self.versions[-1]["VersionId"]                      # the id really stored
+        if self.extra_after_put:                                        # concurrent writer
+            self._add(kwargs["Body"], kwargs["ContentType"], kwargs["Metadata"])  # a third version appears
+        return {"VersionId": self.put_returns or stored_id}             # like boto3
 
     def delete_object(self, Bucket, Key, VersionId):                    # delete one named version
         self.calls.append("delete")                                     # record
+        if self.delete_error is not None:                               # simulated failure
+            raise self.delete_error                                     # propagate it
         self.deleted.append(VersionId)                                  # remember which
         self.versions = [v for v in self.versions if v["VersionId"] != VersionId]  # gone for good
+        if self.swap_after_delete:                                      # simulate a concurrent replacement
+            self.versions[0]["VersionId"] = "version-9998"              # different survivor
         return {}                                                       # like boto3
 
 
@@ -137,6 +150,48 @@ def test_visit_not_in_file_is_refused_without_a_put():                  # nothin
     assert "put" not in s3.calls and "delete" not in s3.calls           # nothing written
 
 
+# ── Hardening (fix round 1) ───────────────────────────────────
+def test_a_truncated_listing_is_refused():                              # a cut-short listing cannot be trusted
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), truncated=True)             # IsTruncated true
+    with pytest.raises(erase.UnexpectedVersionsError):                  # refused
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+    assert "put" not in s3.calls                                        # nothing written
+
+
+def test_non_aes256_encryption_is_refused():                            # no silent downgrade from SSE-KMS
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), encryption="aws:kms")       # original uses KMS
+    with pytest.raises(erase.UnexpectedVersionsError):                  # refused
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+    assert "put" not in s3.calls                                        # nothing written
+
+
+def test_a_different_new_version_is_refused_without_a_delete():         # put id not in the listing
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), put_returns="version-7777")  # put reports an id that is not stored
+    with pytest.raises(erase.UnexpectedVersionsError):                  # refused
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+    assert "delete" not in s3.calls and len(s3.versions) == 2           # old version survives
+
+
+def test_a_third_version_after_the_put_is_refused_without_a_delete():   # concurrent writer
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), extra_after_put=True)       # three versions after the put
+    with pytest.raises(erase.UnexpectedVersionsError):                  # refused
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+    assert "delete" not in s3.calls and len(s3.versions) == 3           # nothing deleted
+
+
+def test_a_failed_delete_propagates_and_leaves_two_versions():          # recovery state
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), delete_error=RuntimeError("boom"))  # delete fails
+    with pytest.raises(RuntimeError):                                   # error propagates
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+    assert len(s3.versions) == 2                                        # old and new both remain
+
+
+def test_a_different_survivor_after_the_delete_is_refused():            # final identity check
+    s3 = FakeS3(csv_bytes(["2008;10;7;a"]), swap_after_delete=True)     # survivor id differs from the put's
+    with pytest.raises(erase.UnexpectedVersionsError):                  # refused
+        erase.erase_visit(s3, BUCKET, KEY, 7)                           # run
+
+
 # ── Command line ──────────────────────────────────────────────
 def test_cli_reads_the_visit_from_the_file_and_prints_no_version_id(tmp_path, monkeypatch, capsys):  # ID and versions stay private
     s3 = FakeS3(csv_bytes(["2008;10;4321;a", "2008;11;8;b"]))           # visit 4321 present
@@ -149,3 +204,31 @@ def test_cli_reads_the_visit_from_the_file_and_prints_no_version_id(tmp_path, mo
     output = capsys.readouterr().out                                    # what was printed
     assert json.loads(output) == {"rows_removed": 1, "versions_before": 1, "versions_after": 1}  # result dict only
     assert "version-" not in output and "4321" not in output            # no VersionId, no visit ID
+
+
+def run_cli(tmp_path, monkeypatch, s3, pick=None):                      # run main() against a fake client
+    monkeypatch.setitem(sys.modules, "boto3", types.SimpleNamespace(client=lambda *args, **kwargs: s3))  # fake boto3
+    (tmp_path / "pick.json").write_text(json.dumps(pick or {"visit_id": 4321, "month": "2008-04"}), encoding="utf-8")  # private pick
+    monkeypatch.setattr("sys.argv", ["t1b_erase_visit_from_bronze.py", "--bucket", BUCKET, "--key", KEY, "--visit-file", str(tmp_path / "pick.json")])  # pretend typed
+    return erase.main()                                                 # exit code
+
+
+def test_cli_client_error_prints_only_the_code(tmp_path, monkeypatch, capsys):  # AWS error text can hold ids
+    from botocore.exceptions import ClientError                         # the real error type
+    secret = "version-SECRET-4321"                                      # an id inside the message text
+    error = ClientError({"Error": {"Code": "NoSuchVersion", "Message": secret}}, "DeleteObject")  # carries the id
+    s3 = FakeS3(csv_bytes(["2008;10;4321;a"]), delete_error=error)      # delete raises it
+    assert run_cli(tmp_path, monkeypatch, s3) != 0                      # non-zero exit
+    captured = capsys.readouterr()                                      # stdout and stderr
+    assert "NoSuchVersion" in captured.err and secret not in captured.out + captured.err  # code only
+
+
+def test_cli_bad_visit_file_prints_a_fixed_message(tmp_path, monkeypatch, capsys):  # unreadable pick file
+    assert run_cli(tmp_path, monkeypatch, FakeS3(b""), pick={"month": "2008-04"}) != 0  # no visit_id key
+    assert "visit file" in capsys.readouterr().err                      # fixed message
+
+
+def test_cli_refusal_prints_counts_only_and_fails(tmp_path, monkeypatch, capsys):  # known refusals
+    s3 = FakeS3(csv_bytes(["2008;10;4321;a"]), extra_versions=1)        # two versions
+    assert run_cli(tmp_path, monkeypatch, s3) != 0                      # non-zero exit
+    assert "version-" not in capsys.readouterr().err                    # no ids

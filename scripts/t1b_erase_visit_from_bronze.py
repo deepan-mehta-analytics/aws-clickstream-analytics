@@ -3,6 +3,10 @@
 The owner runs this in an AWS window. It rewrites the object without the visit's rows, then deletes the old
 version by its VersionId, so exactly one version (without the visit) is left. The visit ID is read from the private
 JSON written by `t1b_evidence.py pick-visit`, so it never lands in shell history, and no VersionId is ever printed.
+
+Recovery: if the script stops after the upload but before the delete finishes, the key holds 2 versions (the old one
+with the visit, the new one without). The owner lists the versions, opens the newest, confirms the visit is gone, and
+deletes the OLDER version by its VersionId by hand. Never delete the newest version.
 """  # module docstring
 
 # ── Imports ───────────────────────────────────────────────────
@@ -42,6 +46,8 @@ def remove_visit_rows(csv_bytes: bytes, visit_id: int) -> tuple[bytes, int]:  # 
 # ── Version listing ───────────────────────────────────────────
 def _list_versions(s3, bucket: str, key: str) -> tuple[list, list]:     # (versions, delete markers) of exactly this key
     response = s3.list_object_versions(Bucket=bucket, Prefix=key)       # prefix match, so other keys can appear
+    if response.get("IsTruncated"):                                     # a cut-short listing could hide versions
+        raise UnexpectedVersionsError("the version listing was truncated; refusing to continue")  # no IDs
     versions = [item for item in response.get("Versions", []) if item["Key"] == key]  # keep the exact key only
     markers = [item for item in response.get("DeleteMarkers", []) if item["Key"] == key]  # keep the exact key only
     return versions, markers                                            # both lists
@@ -55,16 +61,19 @@ def erase_visit(s3, bucket: str, key: str, visit_id: int) -> dict:      # rewrit
     versions_before = len(versions)                                     # count before the rewrite
     old_version_id = versions[0]["VersionId"]                           # the version to delete at the end
     original = s3.get_object(Bucket=bucket, Key=key, VersionId=old_version_id)  # step 2: read that exact version
+    if original.get("ServerSideEncryption") != "AES256":                # SSE-KMS (or none) must not be downgraded silently
+        raise UnexpectedVersionsError("the object is not encrypted with AES256; refusing to rewrite it")  # no IDs
     new_body, removed = remove_visit_rows(original["Body"].read(), visit_id)  # drop the visit's rows
     if removed == 0:                                                    # the visit is not in the file
         raise NothingToEraseError("the visit has no rows in this object; nothing was uploaded")  # refuse before any write
-    s3.put_object(Bucket=bucket, Key=key, Body=new_body, ContentType=original["ContentType"], ServerSideEncryption="AES256", Metadata=original.get("Metadata", {}))  # step 3: upload as a new version, same type and metadata
+    uploaded = s3.put_object(Bucket=bucket, Key=key, Body=new_body, ContentType=original["ContentType"], ServerSideEncryption="AES256", Metadata=original.get("Metadata", {}))  # step 3: upload as a new version, same type and metadata
+    new_version_id = uploaded["VersionId"]                              # the id of the version just written
     versions, markers = _list_versions(s3, bucket, key)                 # step 4: expect old plus new
-    if len(versions) != 2 or markers or old_version_id not in {item["VersionId"] for item in versions}:  # anything else is unexpected
+    if markers or {item["VersionId"] for item in versions} != {old_version_id, new_version_id} or len(versions) != 2:  # exactly the old and the new version, nothing else
         raise UnexpectedVersionsError(f"after the upload expected 2 versions and no delete markers, found {len(versions)} versions and {len(markers)} markers")  # counts only, no IDs
     s3.delete_object(Bucket=bucket, Key=key, VersionId=old_version_id)  # step 5: permanently delete the old version by its ID
     versions_after, markers_after = _list_versions(s3, bucket, key)     # step 6: confirm the end state
-    if len(versions_after) != 1 or markers_after or versions_after[0]["VersionId"] == old_version_id:  # must be the new version only
+    if len(versions_after) != 1 or markers_after or versions_after[0]["VersionId"] != new_version_id:  # must be the new version only
         raise UnexpectedVersionsError(f"after the delete expected 1 new version and no delete markers, found {len(versions_after)} versions and {len(markers_after)} markers")  # counts only, no IDs
     return {"rows_removed": removed, "versions_before": versions_before, "versions_after": len(versions_after)}  # summary, no IDs
 
@@ -76,10 +85,23 @@ def main() -> int:                                                      # entry 
     parser.add_argument("--key", required=True)                         # object key of the source file
     parser.add_argument("--visit-file", type=Path, required=True)       # private JSON from t1b_evidence.py pick-visit
     args = parser.parse_args()                                          # read options
-    visit_id = int(json.loads(args.visit_file.read_text(encoding="utf-8"))["visit_id"])  # ID read from the file, never typed
     import boto3                                                        # imported here so tests need no AWS
+    from botocore.exceptions import ClientError                         # AWS error type, imported here for the same reason
+    try:                                                                # every failure below prints a fixed message only
+        visit_id = int(json.loads(args.visit_file.read_text(encoding="utf-8"))["visit_id"])  # ID read from the file, never typed
+    except (OSError, ValueError, KeyError, TypeError):                  # unreadable or malformed pick file
+        print("error: could not read a visit ID from the visit file", file=sys.stderr)  # fixed text, no file content
+        return 1                                                        # failure
     s3 = boto3.client("s3", region_name="ap-south-1")                   # S3 client in the project region
-    print(json.dumps(erase_visit(s3, args.bucket, args.key, visit_id))) # result counts only
+    try:                                                                # run the erase
+        result = erase_visit(s3, args.bucket, args.key, visit_id)       # the work
+    except (UnexpectedVersionsError, NothingToEraseError) as error:     # known refusals, messages hold counts only
+        print(f"error: {error}", file=sys.stderr)                       # counts-only text
+        return 1                                                        # failure
+    except ClientError as error:                                        # AWS error text can contain IDs
+        print(f"error: ClientError: {error.response.get('Error', {}).get('Code', 'Unknown')}", file=sys.stderr)  # code only
+        return 1                                                        # failure
+    print(json.dumps(result))                                           # result counts only
     return 0                                                            # success
 
 
