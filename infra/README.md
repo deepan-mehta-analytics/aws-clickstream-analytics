@@ -8,7 +8,7 @@ credentials; CI only lints and tests the templates.
 | Folder | Stack name | What it creates | Status |
 |---|---|---|---|
 | `foundation/` | `clickstream-foundation` | One S3 bucket for packaged code (SSE-S3, private, TLS only, 30-day expiry) | Deployed 2026-10-05 (owner); kept between windows |
-| `t1-lake/` | `clickstream-t1-lake` | Tier T1a (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job and catalog, Athena workgroup) | Two creation attempts on 2026-10-05 rolled back on account-level limits (GAPS G-18, G-19) and were deleted; waiting on AWS Support to enable Glue |
+| `t1-lake/` | `clickstream-t1-lake` | Tier T1a/T1b (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job with Iceberg enabled and scoped Glue Data Catalog access, Gold catalog tables, Athena workgroup; the three Silver Iceberg tables are created by Athena from `sql/ddl/`, not by this template) | Two creation attempts on 2026-10-05 rolled back on account-level limits (GAPS G-18, G-19) and were deleted; waiting on AWS Support to enable Glue |
 
 ## Checks (no AWS credentials)
 

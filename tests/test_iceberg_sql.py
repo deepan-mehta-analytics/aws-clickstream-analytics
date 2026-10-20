@@ -21,18 +21,30 @@ def test_ddl_columns_match_the_code():                                  # column
     assert [c for c, _ in ddl_columns(ddl["silver_deleted_visits"])] == ["visit_id", "deleted_time", "reason", "bronze_key"]  # deleted visits
 
 
-def template_types(resource: str, next_resource: str) -> dict[str, str]:  # column -> Glue type from the T1a template
-    text = (REPO / "infra" / "t1-lake" / "template.yaml").read_text(encoding="utf-8")  # template text
-    block = text.split(f"  {resource}:", 1)[1].split(f"  {next_resource}:", 1)[0]  # just that resource
-    return dict(re.findall(r"\{ Name: (\w+), Type: (\w+) \}", block))      # name -> type, partition key included
+PINNED_TYPES = {                                                        # the T1a Parquet tables' column types, captured before those resources were removed
+    "silver_clicks": {                                                  # Silver clicks, partition key included
+        "click_month": "string", "click_id": "string", "visit_id": "bigint", "click_number_in_visit": "bigint",  # key, id, visit, position
+        "click_date": "date", "click_time_synthetic": "timestamp", "click_hour_shop_time_synthetic": "bigint",  # dates and times
+        "product_code": "string", "category": "string", "colour": "string", "price_usd": "bigint",  # product details
+        "priced_above_category_average": "boolean", "page_number_in_shop": "bigint", "photo_position_on_page": "string",  # flags and placement
+        "photo_angle": "string", "country_code": "bigint", "device_type_synthetic": "string",  # angle, country, device
+        "received_time": "timestamp", "seconds_late": "bigint",         # arrival
+    },
+    "silver_clicks_rejected": {                                         # rejected clicks, partition key included
+        "source_month": "string", "year": "bigint", "month": "bigint", "day": "bigint",  # key and source date
+        "click_number_in_visit": "bigint", "country_code": "bigint", "visit_id": "bigint", "category_code": "bigint",  # source codes
+        "product_code": "string", "colour_code": "bigint", "photo_position_code": "bigint", "photo_angle_code": "bigint",  # more codes
+        "price_usd": "bigint", "price_above_category_average_code": "bigint", "page_number_in_shop": "bigint",  # price and page
+        "click_id": "string", "click_time_synthetic": "timestamp", "device_type_synthetic": "string",  # built fields
+        "received_time": "timestamp", "data_source": "string", "rejection_reason": "string", "rejected_time": "timestamp",  # audit fields
+    },
+}
 
 
-def test_ddl_types_match_the_t1a_template():                            # a silent bigint -> int drift must fail
+def test_ddl_types_match_the_pinned_t1a_types():                        # a silent bigint -> int drift must fail
     ddl = load_ddl()                                                    # table name -> SQL text
-    clicks = template_types("SilverClicksTable", "BronzeSourceClicksTable")  # Silver clicks types
-    rejected = template_types("SilverClicksRejectedTable", "GoldClicksTable")  # rejected types
-    assert dict(ddl_columns(ddl["silver_clicks"])) == clicks            # same name and type per column
-    assert dict(ddl_columns(ddl["silver_clicks_rejected"])) == rejected  # same name and type per column
+    assert dict(ddl_columns(ddl["silver_clicks"])) == PINNED_TYPES["silver_clicks"]  # same name and type per column
+    assert dict(ddl_columns(ddl["silver_clicks_rejected"])) == PINNED_TYPES["silver_clicks_rejected"]  # same name and type per column
     assert ddl_columns(ddl["silver_deleted_visits"]) == [("visit_id", "bigint"), ("deleted_time", "timestamp"), ("reason", "string"), ("bronze_key", "string")]  # pinned
 
 

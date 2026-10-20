@@ -50,6 +50,7 @@ def test_glue_arguments_match_the_script():                             # templa
     wanted = {element.value for element in names.elts} - {"JOB_NAME", "JOB_RUN_ID"}  # our own arguments
     given = {key[2:] for key in RESOURCES["BuildSilverGoldJob"]["Properties"]["DefaultArguments"]} & wanted  # template provides them
     assert given == wanted                                              # nothing missing
+    assert "silver_path" not in wanted and "catalog_database" in wanted  # Silver is addressed through the catalog, not a path
 
 
 def test_glue_script_asks_for_no_reserved_argument():                   # awsglue registers these itself; asking again crashes argparse
@@ -92,11 +93,9 @@ def test_partitioned_tables_use_projection():                           # no cra
 
 def test_table_columns_match_the_code():                                # template stays in step with the Spark output
     from clickstream.gold import CALENDAR_COLUMNS, GOLD_CLICK_COLUMNS, PRODUCT_COLUMNS, VISIT_COLUMNS  # Gold shapes
-    from clickstream.silver import SILVER_COLUMNS                       # Silver shape
     def names(table_name):                                              # data + partition columns
         table_input = table(table_name)                                 # definition
         return [c["Name"] for c in table_input["StorageDescriptor"]["Columns"]] + [c["Name"] for c in table_input.get("PartitionKeys", [])]  # in order
-    assert names("silver_clicks") == SILVER_COLUMNS                     # partition column last, as Spark writes it
     assert names("gold_clicks") == GOLD_CLICK_COLUMNS                   # same
     assert names("gold_visits") == VISIT_COLUMNS                        # same
     assert names("gold_products") == PRODUCT_COLUMNS                    # whole table
@@ -104,14 +103,12 @@ def test_table_columns_match_the_code():                                # templa
 
 
 # ── Fix round 1 (Task 9 review) ────────────────────────────────
-def test_more_table_columns_match_the_code():                           # minor 1: rejected/countries/devices too
+def test_more_table_columns_match_the_code():                           # minor 1: countries/devices too (Silver tables are Athena Iceberg now: test_iceberg_sql.py)
     pytest.importorskip("pyspark", reason="install the spark extra: pip install -e .[dev,spark]")  # these constants live in a pyspark-importing module
     from clickstream_spark.gold import COUNTRY_SCHEMA, DEVICE_SCHEMA     # static reference table shapes
-    from clickstream_spark.silver import REJECTED_COLUMNS               # clicks_rejected shape
     def names(table_name):                                              # data + partition columns
         table_input = table(table_name)                                 # definition
         return [c["Name"] for c in table_input["StorageDescriptor"]["Columns"]] + [c["Name"] for c in table_input.get("PartitionKeys", [])]  # in order
-    assert names("silver_clicks_rejected") == REJECTED_COLUMNS          # partition column last, as Spark writes it
     assert names("gold_countries") == _ddl_names(COUNTRY_SCHEMA)        # static reference table
     assert names("gold_devices") == _ddl_names(DEVICE_SCHEMA)           # static reference table
 
@@ -125,3 +122,41 @@ def test_glue_job_uses_custom_logging_not_deprecated_continuous_log():  # Findin
         group = RESOURCES[f"Glue{suffix.capitalize()}LogGroup"]["Properties"]  # the log group
         assert _sub_text(group["LogGroupName"]) == f"/aws-glue/${{AWS::StackName}}/{suffix}"  # matches the prefix
         assert group["RetentionInDays"] == 7                            # no slow storage leak
+
+
+# ── Task 5: Iceberg Silver (Athena creates the tables, the job writes through the Glue catalog) ──
+GLUE_ACTIONS = {"glue:GetDatabase", "glue:GetTable", "glue:UpdateTable"}  # Iceberg GlueCatalog refresh + commit (ledger: Task 5 Step 1)
+ICEBERG_CONF = [                                                        # the five settings from the AWS Glue Iceberg guide
+    "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",  # SQL extensions
+    "spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog",  # the catalog
+    "spark.sql.catalog.glue_catalog.warehouse=s3://${SilverBucket}/",   # warehouse = the Silver bucket
+    "spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog",  # Glue Data Catalog
+    "spark.sql.catalog.glue_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO",  # S3 file access
+]
+
+
+def test_silver_tables_are_not_in_the_template():                       # Athena creates them from sql/ddl/
+    names = {body["Properties"]["TableInput"]["Name"] for body in of_type("AWS::Glue::Table").values()}  # catalog table names
+    assert not names & {"silver_clicks", "silver_clicks_rejected", "silver_deleted_visits"}  # no Silver table resources
+    assert {"gold_clicks", "gold_visits", "gold_products", "gold_calendar_days"} <= names  # Gold stays
+    assert not [key for key in RESOURCES if key.startswith("Silver") and key.endswith("Table")]  # no Silver table resource names either
+
+
+def test_glue_job_enables_iceberg():                                    # --datalake-formats and the --conf chain
+    arguments = RESOURCES["BuildSilverGoldJob"]["Properties"]["DefaultArguments"]  # job arguments
+    assert arguments["--datalake-formats"] == "iceberg"                 # Glue-provided Iceberg jars
+    conf = _sub_text(arguments["--conf"])                               # one --conf key, chained with " --conf "
+    assert conf == " --conf ".join(ICEBERG_CONF)                        # exactly the five settings, in order
+    assert "format-version" not in conf                                 # the table version is Athena's (v2) choice
+    assert arguments["--catalog_database"] == {"Ref": "ClickstreamDatabase"}  # clickstream_t1, from the database resource
+    assert "--silver_path" not in arguments                             # Silver has no path argument any more
+
+
+def test_glue_role_catalog_access_is_scoped():                          # least privilege on the Data Catalog
+    statements = RESOURCES["GlueJobRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]  # role statements
+    glue = [s for s in statements if any(a.startswith("glue:") for a in ([s["Action"]] if isinstance(s["Action"], str) else s["Action"]))]  # statements with glue: actions
+    assert len(glue) == 1 and glue[0]["Effect"] == "Allow"              # one Allow statement for the catalog
+    assert sorted(glue[0]["Action"]) == sorted(GLUE_ACTIONS)            # exactly those actions, no duplicates
+    prefix = "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:"  # built, never a literal account
+    resources = [_sub_text(r) for r in glue[0]["Resource"]]             # ARN templates as written
+    assert resources == [prefix + "catalog", prefix + "database/clickstream_t1", prefix + "table/clickstream_t1/silver_*"]  # catalog, database, Silver tables only

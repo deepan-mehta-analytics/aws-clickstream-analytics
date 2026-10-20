@@ -1,4 +1,4 @@
-"""AWS Glue job (tier T1a): new Bronze files -> Silver and Gold Parquet, with job bookmarks."""  # module docstring
+"""AWS Glue job (tier T1b): new Bronze files -> Silver Iceberg tables and Gold Parquet, with job bookmarks."""  # module docstring
 
 # ── Imports (awsglue exists only inside Glue) ─────────────────
 import json                                                             # quality report
@@ -11,12 +11,13 @@ from awsglue.job import Job                                             # bookma
 from awsglue.utils import getResolvedOptions                            # read --arguments
 from pyspark.context import SparkContext                                # Spark entry
 
-from clickstream_spark.settings import SPARK_SETTINGS                   # same settings as the tests
+from clickstream_spark.iceberg_tables import SilverTables               # the three Silver table names
+from clickstream_spark.settings import CATALOG, SPARK_SETTINGS          # catalog name and the same settings as the tests
 from clickstream_spark.sql_files import load_summary_sql                # summary SQL from the zip
 from clickstream_spark.storage import LakePaths, run_increment          # the work
 
 # ── Arguments and session ─────────────────────────────────────
-args = getResolvedOptions(sys.argv, ["JOB_NAME", "bronze_path", "silver_path", "gold_path", "reports_bucket"])  # full names (Glue 6.0: no prefix matching); JOB_RUN_ID is reserved, awsglue adds it to args itself
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "bronze_path", "catalog_database", "gold_path", "reports_bucket"])  # full names (Glue 6.0: no prefix matching); JOB_RUN_ID is reserved, awsglue adds it to args itself
 glue = GlueContext(SparkContext.getOrCreate())                          # Glue context
 spark = glue.spark_session                                              # Spark session
 for key, value in SPARK_SETTINGS.items():                               # UTC, ANSI, dynamic overwrite...
@@ -35,7 +36,7 @@ bronze = glue.create_dynamic_frame.from_options(                        # S3 CSV
 )
 
 # ── Build, write, report ──────────────────────────────────────
-report = run_increment(spark, bronze.toDF(), LakePaths(args["silver_path"], args["gold_path"]), run_time, load_summary_sql())  # the work
+report = run_increment(spark, bronze.toDF(), LakePaths(args["gold_path"]), SilverTables(CATALOG, args["catalog_database"]), run_time, load_summary_sql())  # the work
 report.update({"job_run_id": args["JOB_RUN_ID"], "run_time": run_time.isoformat()})  # identify the run
 body = json.dumps(report, indent=2, default=str)                        # JSON text
 print(body)                                                             # to CloudWatch Logs
