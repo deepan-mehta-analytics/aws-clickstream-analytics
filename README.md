@@ -22,7 +22,7 @@ and which products make them leave after one click.
 #### ☁️ The AWS path (Mumbai region)
 
 - ✅ **Core lake run on AWS (2026-10-19)** — **Lambda → S3 → Glue 6.0 Spark → Glue Data Catalog → Athena**; Athena's counts matched the local twin on **all 4 checks**, and the **job bookmark** made the second Glue run read only the new month
-- 💰 **Priced before it's built** — the AWS version is built in small tiers, each priced in rupees first
+- 💰 **Priced before it's built, then checked against the bill** — the AWS version is built in small tiers, each priced in rupees first; the T1a run's measured bill was **≈ ₹3.33** against an estimate of ≈ ₹12
 - 🧱 **Infrastructure as code** — an AWS SAM + CloudFormation stack, checked by guardrail tests and deployed through a reviewed change set
 - 🧹 **Torn down after use** — the T1a stack was deleted the same day and checked gone, so the project costs nothing per month between windows
 
@@ -379,7 +379,7 @@ File-by-file detail is in [`tests/README.md`](tests/README.md).
 > **Tier T0 verified on the full UCI file, 2026-09-25**, from a local run.
 > **Tier T1a verified on AWS Mumbai, 2026-10-19**, from one owner-run window
 > (masked evidence in [`evidence/t1a/2026-10-19/`](evidence/t1a/2026-10-19/)).
-> Every number below was measured; the T1a cost is not read yet.
+> Every number below was measured, including the T1a bill.
 
 ### ✅ Correctness: every count matched the measured source, locally and on AWS
 
@@ -427,14 +427,21 @@ tables ([`athena/05_visit_depth_funnel.json`](evidence/t1a/2026-10-19/athena/05_
 | Silver clicks, Gold visits and rejects by month (Parquet) | 0 bytes each: Parquet keeps row counts in file metadata |
 | Browse-depth funnel (Gold summary) | 113 bytes |
 
-💰 **Cloud cost (estimate, not measured):** about ₹450 one-time for the full
-hybrid build with a local dashboard, and ₹0/month after teardown. The
-Redshift window runs on the Redshift Serverless $300 trial credit (confirmed
-available 2026-10-05); there are no other credits, so the rest is out of
-pocket at list price. Details in the [cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
-Tier T1a alone is estimated at about ₹12 per proof run (an estimate from the
-annex). Its measured cost will come from Cost Explorer 1–2 days after the
-2026-10-19 window; the measured usage is in [`docs/cost-model.md`](docs/cost-model.md).
+### 💰 Cloud cost
+
+| Scope | Cost | Kind |
+|---|---|---|
+| T1a window on AWS (Glue $0.0296, Athena $0.0001, S3, plus 18% GST) | **≈ ₹3.33** (estimate was ≈ ₹12) | Measured: October 2026 bill, Cost Explorer |
+| Whole AWS account, October 2026, tax included | $0.0398 ≈ ₹3.78 | Measured |
+| Full hybrid build with a local dashboard | about ₹450 one-time, ₹0/month after teardown | Estimate |
+
+The bill also settled a measurement question: the Glue charge equals 525
+DPU-seconds at Mumbai's Flex price, matching the later API reading rather
+than the window's evidence. The Redshift window runs on the Redshift
+Serverless $300 trial credit (confirmed available 2026-10-05); there are no
+other credits, so the rest is out of pocket at list price. Details in
+[`docs/cost-model.md`](docs/cost-model.md) and the
+[cost-tier annex](docs/adr/0001-hybrid-cost-tiers.md).
 
 ---
 
@@ -462,7 +469,7 @@ without a real run behind it.
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
-- **The T1a cost is not measured yet**: it is read from Cost Explorer 1–2 days after the window. The Glue DPU-seconds also differ between two readings (291/299 in the window's evidence, 237/226 from a later API call); the bill will settle it ([`docs/cost-model.md`](docs/cost-model.md))
+- **The cost is read per month, not per window**: Cost Explorer's monthly view covers the whole account, so the T1a figure (≈ ₹3.33) is attributed by service; the window's own Glue evidence over-reported DPU-seconds (291/299) against what was billed (matching 237/226) ([`docs/cost-model.md`](docs/cost-model.md))
 - **The first Glue run on AWS failed on a script bug** that local tests could not reach (the `awsglue` library exists only inside Glue): the script asked for an argument Glue reserves for itself. It is fixed and now guarded by a test; the Glue minimum worker count is still unverified ([`docs/GAPS.md`](docs/GAPS.md) G-15)
 - **Encryption in transit is configured but not tested**: the TLS-only bucket policies were deployed, but no plain-HTTP request was tried against them
 - **Single runs only**: runtimes above are one run each, not averages
@@ -473,7 +480,7 @@ without a real run behind it.
 ## 🔜 Roadmap
 
 - [x] T0: local twin (Bronze → Silver → Gold → summaries, verified on the full file)
-- [x] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena), run and torn down on 2026-10-19; measured cost still to be read
+- [x] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena), run and torn down on 2026-10-19; measured cost ≈ ₹3.33
 - [ ] T1b–T1d: Iceberg Silver, ingest extras, evidence pass
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window

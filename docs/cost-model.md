@@ -2,7 +2,8 @@
 
 Estimated AWS cost for this project, built only from list prices on AWS
 pricing pages. **Every figure is an estimate until a real run's bill replaces
-it.** No number here is a measured cost.
+it.** The only measured cost so far is the October 2026 bill for tier T1a
+(section B2 and the teardown log).
 
 - **Account:** legacy AWS Free Tier (pre-2025 account, confirmed by AWS
   support 2026-09-24). No new-plan credits. **No free credits of any kind
@@ -123,17 +124,40 @@ Running B every day for 30 days comes to about $4.50/month. Glue Flex
 
 The annex prices T1 at 2 DPU for 10 minutes on Glue 6.0+; the Flex execution
 class and the 15-minute timeout in [ADR-0005](adr/0005-t1-batch-lake-design.md)
-are not separately priced here. The measured cost replaces this line after
-the first window.
+are not separately priced here.
+
+**Measured cost, October 2026** (Cost Explorer, monthly view for the whole
+account, read 2026-10-20; USD as billed, INR at ₹94.93/USD, ECB via
+Frankfurter, 2026-10-19):
+
+| Service | Billed (USD) | Where it came from |
+|---|---|---|
+| Glue | $0.029604 | The 3 Glue 6.0 Flex runs of 2026-10-19 |
+| Athena | $0.0001 | The 5 queries of 2026-10-19 |
+| S3 | $0.000019 | Buckets and code uploads in both windows |
+| Secrets Manager | $0.000045 | Not this project: no template creates a secret |
+| CloudFormation, KMS, Lambda, SNS, SQS, CloudWatch | $0 | |
+| Tax (shown rounded to the cent) | $0.01 | |
+| **Total** | **$0.0398 ≈ ₹3.78** | September 2026: $0 |
+
+**T1a's own cost was about ₹3.33** (Glue, Athena and S3, $0.0297 plus 18%
+GST), against the estimate of about ₹12. The view is monthly, so the two
+windows cannot be split from it; the 2026-10-05 window ran no Glue job and
+no Athena query, so almost all of it belongs to 2026-10-19.
+
+**The bill settles the DPU-seconds question.** At the Mumbai price for Glue
+6.0+ Flex ($0.203 per DPU-hour, Price List API `AWSGlue/ap-south-1`,
+published 2026-10-12), $0.029604 is 525 DPU-seconds. That matches the
+later API reading (60 + 237 + 226 = 523) within rounding, not the window's
+evidence (60 + 291 + 299 = 650, which would have cost $0.0367).
 
 **Measured usage, window of 2026-10-19** (from the masked evidence in
-[`evidence/t1a/2026-10-19/`](../evidence/t1a/2026-10-19/); cost still to be
-read in Cost Explorer):
+[`evidence/t1a/2026-10-19/`](../evidence/t1a/2026-10-19/)):
 
 | Item | Measured |
 |---|---|
 | Glue 6.0 Flex runs | 3: one failed after 39 s (a script bug, fixed in `0c73706`), then two successes of 145 s and 149 s |
-| Glue DPU-seconds | Failed run 60. Successful runs: 291 and 299 in the window's evidence; 237 and 226 when `aws glue get-job-runs` was read after the window ended. The two readings disagree and the billed figure will settle it |
+| Glue DPU-seconds | Failed run 60. Successful runs: 291 and 299 in the window's evidence; 237 and 226 when `aws glue get-job-runs` was read after the window ended. The bill (525 DPU-seconds) matches the later reading |
 | Athena data scanned | 6.5 MB for the Bronze CSV count; 0 bytes for the Silver and Gold counts (Parquet row counts come from file metadata); 113 bytes for the funnel query |
 | Lambda | The earlier, failed try wrote April–July to Bronze; the successful window's 2 invocations skipped those 4 months and wrote August |
 
@@ -211,11 +235,10 @@ real backstop.
 
 ## 5. Teardown log
 
-One row per working window with cost-bearing resources. Empty until the
-first cloud run.
+One row per working window with cost-bearing resources.
 
 | Date | Resources created | Torn down / paused | Verified by | Measured cost |
 |---|---|---|---|---|
 | 2026-09-25 | None: tier T0 local twin ran on a laptop | Nothing to tear down | — | ₹0 AWS cost |
-| 2026-10-05 | `clickstream-foundation` (artifacts bucket, ~35 KB of code); two attempts at `clickstream-t1-lake`, both failed during creation (Lambda concurrency quota of 10; Glue disabled for the account, GAPS G-18, G-19) | Both T1a attempts rolled back automatically and the stacks were deleted; the foundation bucket stays (objects expire after 30 days); `aws logout` | `aws cloudformation wait stack-delete-complete` returned with no error after each delete | _pending: read in Cost Explorer after 1–2 days_ |
-| 2026-10-19 | `clickstream-t1-lake` (4 buckets, Lambda, Glue job, 13 catalog tables, Athena workgroup, 3 log groups), after AWS Support enabled Glue and raised the Lambda quota to 1,000 (G-18, G-19); 3 Glue runs, 2 ingest invocations, 5 Athena queries | `t1a-teardown.ps1` emptied the four buckets, `sam delete` removed the stack and the uploaded code, the shared `/aws-glue/jobs/logs-v2` group set to 1-day retention; `aws logout` | Read-only listing afterwards: stack "does not exist"; no Lambda functions, Glue jobs or Glue databases; only the default `primary` Athena workgroup; the one Glue log group holds 0 bytes | _pending: read in Cost Explorer after 1–2 days_ |
+| 2026-10-05 | `clickstream-foundation` (artifacts bucket, ~35 KB of code); two attempts at `clickstream-t1-lake`, both failed during creation (Lambda concurrency quota of 10; Glue disabled for the account, GAPS G-18, G-19) | Both T1a attempts rolled back automatically and the stacks were deleted; the foundation bucket stays (objects expire after 30 days); `aws logout` | `aws cloudformation wait stack-delete-complete` returned with no error after each delete | ≈ ₹0: no Glue or Athena use; only S3 storage, inside the October total below |
+| 2026-10-19 | `clickstream-t1-lake` (4 buckets, Lambda, Glue job, 13 catalog tables, Athena workgroup, 3 log groups), after AWS Support enabled Glue and raised the Lambda quota to 1,000 (G-18, G-19); 3 Glue runs, 2 ingest invocations, 5 Athena queries | `t1a-teardown.ps1` emptied the four buckets, `sam delete` removed the stack and the uploaded code, the shared `/aws-glue/jobs/logs-v2` group set to 1-day retention; `aws logout` | Read-only listing afterwards: stack "does not exist"; no Lambda functions, Glue jobs or Glue databases; only the default `primary` Athena workgroup; the one Glue log group holds 0 bytes | ≈ ₹3.33 (Glue $0.0296, Athena $0.0001, S3, plus GST); whole October bill $0.0398 ≈ ₹3.78 (section B2) |
