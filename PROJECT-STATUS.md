@@ -30,6 +30,14 @@ Provisional — to be replaced by the real plan once Phase 0 research lands.
 ## Last commit
 See `git log` on `main` (hashes are not repeated here). Latest milestone: the T1a window on AWS, 2026-10-19 (stack deployed, Glue script fix for a reserved argument, 4 of 4 Athena checks matched, bookmark proven, stack torn down and verified; logged in `docs/cost-model.md`; G-16 to G-19 resolved). Earlier: the first owner window, 2026-10-05 (foundation deployed; T1a stack blocked by account-level limits). Last CI-verified count: 139 passed (2026-10-19).
 
+## Releases
+
+| Version | Date | What it delivers |
+|---|---|---|
+| `v0.1.0` | 2026-10-20 | Local twin (T0) + core lake run on AWS Mumbai (T1a): 4 of 4 Athena checks matched, bookmark proven, measured cost ≈ ₹3.33 |
+
+Planned: `v0.2.0` T1b–T1d (Iceberg Silver, ingest extras, evidence pass) · `v0.3.0` T2 orchestration and monitoring · `v0.4.0` T3 + T4 streaming and Redshift windows · `v0.5.0` T5 dashboard · `v1.0.0` complete demo.
+
 ## Metrics
 From a **local run (tier T0)** on the full UCI file, 2026-09-25: 165,474 source clicks, 0 rejected, 165,474 Silver clicks, 24,026 visits, 5,042 one-click visits, 1 reported category mismatch (A18); browse-depth funnel 24,026 / 14,504 / 9,125 / 4,779 / 1,631. From the **T1a run on AWS Mumbai**, 2026-10-19 (masked evidence in `evidence/t1a/2026-10-19/`): the same totals (165,474 clicks, 24,026 visits, 5,042 one-click visits, 0 rejected, 1 category mismatch); Athena per-month counts matched the expected file on 4 of 4 checks; Glue 6.0 Flex on 2 G.1X workers took 145 s (run 1, 151,326 clicks) and 149 s (run 2, the 14,148 August clicks only); Athena scanned 6.5 MB for the Bronze CSV count and 0 bytes for the Parquet counts. Measured T1a cost (October 2026 bill, Cost Explorer, read 2026-10-20): ≈ ₹3.33 (Glue $0.0296, Athena $0.0001, S3, plus GST) against an estimate of ≈ ₹12; the whole account's October bill was $0.0398 ≈ ₹3.78 incl. tax. The Glue charge equals 525 DPU-seconds, matching the later API reading (237/226), not the window's evidence (291/299). As of 2026-10-19, 139 tests pass on Linux CI (run 39203991057, 132.0 s; 135 on Windows, where 4 lake-storage tests are skipped); the full-file pandas-vs-Spark check matches on all 165,474 clicks.
 
