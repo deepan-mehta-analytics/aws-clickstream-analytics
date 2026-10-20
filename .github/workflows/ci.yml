@@ -29,6 +29,13 @@ jobs:                                                     # jobs run in parallel
         with:                                             # cache options
           path: data/uci553.zip                           # the downloaded file
           key: uci553-bf7a47493025ffb35eebc7a65caf9988    # keyed on its MD5, so a changed file is a new key
+      - name: Read the Iceberg package name               # one source of truth: settings.py
+        id: iceberg                                       # lets later steps read the output
+        run: echo "package=$(grep -E '^ICEBERG_VERSION' src/clickstream_spark/settings.py | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"  # version string, e.g. 1.11.0
+      - uses: actions/cache@v6                            # reuse the downloaded Iceberg jar between runs
+        with:                                             # cache options
+          path: ~/.ivy2                                   # where Spark stores resolved packages
+          key: iceberg-${{ steps.iceberg.outputs.package }}  # a new Iceberg version is a new key
       - name: Install package and dev tools               # same pins as local
         run: python -m pip install -e ".[dev,spark]"          # editable install with pytest, ruff, boto3 and pyspark
       - name: Lint                                        # static checks

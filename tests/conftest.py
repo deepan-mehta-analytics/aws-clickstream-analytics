@@ -52,7 +52,7 @@ def _java_major(java_home):                                             # major 
 
 
 @pytest.fixture(scope="session")                                        # one Spark session for the whole test run
-def spark():                                                            # local Spark with the Glue settings
+def spark(tmp_path_factory):                                            # local Spark with the Glue settings and an Iceberg catalog
     pytest.importorskip("pyspark", reason="install the spark extra: pip install -e .[dev,spark]")  # optional dependency
     java_home = _java_home()                                            # chosen JDK
     major = _java_major(java_home)                                      # its version
@@ -64,10 +64,17 @@ def spark():                                                            # local 
     os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable                # driver too
     from pyspark.sql import SparkSession                                # import only after the checks
 
-    from clickstream_spark.settings import SPARK_SETTINGS               # shared settings
+    from clickstream_spark.settings import CATALOG, ICEBERG_PACKAGE, SPARK_SETTINGS  # shared settings
+    warehouse = tmp_path_factory.mktemp("iceberg_warehouse")            # session temp folder that holds the local Iceberg tables
     builder = (SparkSession.builder.master("local[2]").appName("clickstream-tests")  # two local cores
                .config("spark.sql.shuffle.partitions", "4").config("spark.ui.enabled", "false")  # small shuffles, no web UI
                .config("spark.sql.execution.arrow.pyspark.enabled", "true"))  # toPandas via Arrow: timestamps in the UTC session zone
+    if os.name != "nt":                                                 # Hadoop folder catalogs need winutils on Windows, so Iceberg is Linux/CI only
+        builder = (builder.config("spark.jars.packages", ICEBERG_PACKAGE)   # download the Iceberg jar (cached in ~/.ivy2)
+                   .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")  # Iceberg SQL extensions
+                   .config(f"spark.sql.catalog.{CATALOG}", "org.apache.iceberg.spark.SparkCatalog")  # Iceberg catalog under the Glue name
+                   .config(f"spark.sql.catalog.{CATALOG}.type", "hadoop")   # folder catalog, no Glue needed locally
+                   .config(f"spark.sql.catalog.{CATALOG}.warehouse", str(warehouse)))  # tables live in the temp folder
     for key, value in SPARK_SETTINGS.items():                           # same settings as Glue
         builder = builder.config(key, value)                            # apply each
     session = builder.getOrCreate()                                     # start Spark
