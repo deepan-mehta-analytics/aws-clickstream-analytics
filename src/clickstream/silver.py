@@ -22,6 +22,7 @@ SILVER_COLUMNS = [                                                      # Silver
     "product_code", "category", "colour", "price_usd", "priced_above_category_average", "page_number_in_shop",  # product
     "photo_position_on_page", "photo_angle", "country_code", "device_type_synthetic", "received_time", "seconds_late", "click_month",  # context
 ]
+WEEKEND_COLUMN = "weekend_click"                                        # column added to Silver clicks by the Iceberg migration (not in SILVER_COLUMNS)
 
 
 @dataclass
@@ -92,3 +93,8 @@ def build_silver(bronze: pd.DataFrame, run_time: pd.Timestamp) -> SilverResult: 
     })[SILVER_COLUMNS]                                                  # exact column order
     clicks = clicks.sort_values(["visit_id", "click_number_in_visit"]).reset_index(drop=True)  # stable output order
     return SilverResult(clicks, rejected.reset_index(drop=True), duplicates_removed)  # all three outputs
+
+
+def add_weekend_click(clicks: pd.DataFrame) -> pd.DataFrame:            # append weekend_click: click_date is a Saturday or Sunday
+    weekday = pd.to_datetime(clicks["click_date"]).dt.dayofweek         # pandas: 0 = Monday ... 6 = Sunday
+    return clicks.assign(**{WEEKEND_COLUMN: (weekday >= 5).astype(bool)})  # 5 = Saturday, 6 = Sunday; returns a copy, input untouched

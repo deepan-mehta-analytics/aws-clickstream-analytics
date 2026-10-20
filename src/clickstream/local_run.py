@@ -13,7 +13,7 @@ from clickstream.gold import (                                          # Gold s
     build_calendar_days, build_countries, build_devices, build_gold_clicks, build_products, build_visits, category_mismatches,
 )
 from clickstream.quality import build_quality_report                   # report
-from clickstream.silver import build_silver                             # Silver step
+from clickstream.silver import add_weekend_click, build_silver                             # Silver step
 from clickstream.source_file import read_source_clicks                  # source reader
 from clickstream.summaries import run_summaries                         # summaries
 
@@ -41,7 +41,7 @@ def run_local_pipeline(source_csv: Path, output_dir: Path, received_time: pd.Tim
     # ── Write Parquet, layer by layer ─────────────────────────
     output_dir = Path(output_dir)                                       # accept str or Path
     write_table(bronze, output_dir / "bronze" / "clicks_received")      # Bronze, single file locally
-    write_table(silver.clicks, output_dir / "silver" / "clicks", "click_month")  # Silver by month
+    write_table(add_weekend_click(silver.clicks), output_dir / "silver" / "clicks", "click_month")  # Silver by month, with weekend_click (Gold gets the frame without it)
     write_table(silver.rejected, output_dir / "silver" / "clicks_rejected")  # rejects
     write_table(products, output_dir / "gold" / "products")             # reference table
     write_table(countries, output_dir / "gold" / "countries")           # reference table

@@ -1,10 +1,12 @@
 # ── Tests: Silver clicks, quality rules and rejects ───────────
+import datetime                                                         # calendar dates
+
 import pandas as pd                                                     # dataframes
 from conftest import make_source, source_row                            # hand-made rows
 
 from clickstream.bronze import build_bronze                             # upstream step
 from clickstream.enrichment import add_synthetic_fields                 # upstream step
-from clickstream.silver import SILVER_COLUMNS, build_silver              # code under test
+from clickstream.silver import SILVER_COLUMNS, WEEKEND_COLUMN, add_weekend_click, build_silver  # code under test
 
 RECEIVED = pd.Timestamp("2026-09-25 12:00:00", tz="UTC")                # fixed arrival time
 
@@ -107,3 +109,18 @@ def test_time_not_increasing_is_rejected():                             # review
 def test_first_failing_rule_is_the_recorded_reason():                   # review Important 3
     result = build_silver(bronze_from([{**source_row(1, 1, country=99), "colour_code": 99}]), RECEIVED)  # two failures
     assert result.rejected["rejection_reason"].tolist() == ["country_code outside 1-47"]  # earlier rule wins
+
+
+def test_weekend_click_flags_saturday_and_sunday_only():                # new Silver column
+    dates = [datetime.date(2008, 4, 5), datetime.date(2008, 4, 6), datetime.date(2008, 4, 7)]  # Saturday, Sunday, Monday
+    result = add_weekend_click(pd.DataFrame({"click_date": dates}))     # add the column
+    assert result[WEEKEND_COLUMN].tolist() == [True, True, False]       # weekend days are True
+    assert result.columns[-1] == WEEKEND_COLUMN == "weekend_click"      # the column is last
+    assert result[WEEKEND_COLUMN].dtype == bool                         # plain boolean
+
+
+def test_weekend_click_leaves_silver_columns_and_input_unchanged():     # no side effects
+    frame = pd.DataFrame({"click_date": [datetime.date(2008, 4, 5)]})   # one Saturday
+    add_weekend_click(frame)                                            # result is discarded on purpose
+    assert list(frame.columns) == ["click_date"]                        # the input frame is not modified
+    assert WEEKEND_COLUMN not in SILVER_COLUMNS                         # SILVER_COLUMNS stays as it was

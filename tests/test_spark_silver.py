@@ -71,3 +71,22 @@ def test_duplicates_keep_earliest_copy(spark):                          # resend
     result = build_silver_spark(once.unionByName(resent), RUN)           # both copies
     assert result.duplicates_removed == 1 and result.clicks.count() == 1  # one kept
     assert text_of(result.clicks, "received_time", "yyyy-MM-dd HH:mm:ss") == "2026-09-26 12:00:00"  # the earliest copy
+
+
+def test_weekend_click_flags_saturday_and_sunday_only(spark):           # new Silver column
+    import datetime                                                     # calendar dates
+
+    from clickstream_spark.silver import add_weekend_click_spark        # code under test
+    dates = [datetime.date(2008, 4, 5), datetime.date(2008, 4, 6), datetime.date(2008, 4, 7)]  # Saturday, Sunday, Monday
+    frame = spark.createDataFrame([(day,) for day in dates], "click_date date")  # one column of dates
+    result = add_weekend_click_spark(frame)                             # add the column
+    assert result.columns == ["click_date", "weekend_click"]            # the column is last
+    assert [row.weekend_click for row in result.orderBy("click_date").collect()] == [True, True, False]  # Spark counts Sunday as 1
+
+
+def test_weekend_click_matches_pandas(spark):                           # both engines agree
+    from clickstream.silver import add_weekend_click                    # pandas twin
+    from clickstream_spark.silver import add_weekend_click_spark        # Spark twin
+    expected = add_weekend_click(pandas_silver(edge_rows()).clicks)     # pandas result
+    actual = add_weekend_click_spark(spark_silver(spark, edge_rows()).clicks)  # Spark result
+    pd.testing.assert_frame_equal(sorted_pandas(actual, ["click_id"]), sorted_pandas(expected, ["click_id"]))  # same values and types

@@ -9,7 +9,7 @@ from pyspark.sql import functions as F                                  # column
 
 from clickstream.codebook import CATEGORIES, COLOURS, PHOTO_ANGLES, PHOTO_POSITIONS  # decode tables (shared)
 from clickstream.enrichment import SHOP_TIMEZONE                        # Europe/Warsaw
-from clickstream.silver import REQUIRED_COLUMNS, SILVER_COLUMNS, VALID_CODE_RANGES  # rules and output shape (shared)
+from clickstream.silver import REQUIRED_COLUMNS, SILVER_COLUMNS, VALID_CODE_RANGES, WEEKEND_COLUMN  # rules and output shape (shared)
 from clickstream_spark.bronze import BRONZE_COLUMNS                     # input columns
 
 REJECTED_COLUMNS = BRONZE_COLUMNS + ["rejection_reason", "rejected_time", "source_month"]  # clicks_rejected columns (source_month = partition)
@@ -82,3 +82,7 @@ def build_silver_spark(bronze: DataFrame, run_time: datetime) -> SparkSilverResu
         F.date_format("_real_date", "yyyy-MM").alias("click_month"),    # partition value
     ).select(SILVER_COLUMNS)                                            # exact order
     return SparkSilverResult(clicks, rejected, duplicates_removed)      # all three outputs
+
+
+def add_weekend_click_spark(clicks: DataFrame) -> DataFrame:            # Spark twin of add_weekend_click
+    return clicks.withColumn(WEEKEND_COLUMN, F.dayofweek(F.col("click_date")).isin(1, 7))  # Spark: 1 = Sunday ... 7 = Saturday
