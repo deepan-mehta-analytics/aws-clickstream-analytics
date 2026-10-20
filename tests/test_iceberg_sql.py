@@ -29,7 +29,7 @@ PINNED_TYPES = {                                                        # the T1
         "priced_above_category_average": "boolean", "page_number_in_shop": "bigint", "photo_position_on_page": "string",  # flags and placement
         "photo_angle": "string", "country_code": "bigint", "device_type_synthetic": "string",  # angle, country, device
         "received_time": "timestamp", "seconds_late": "bigint",         # arrival
-    },
+    },                                                                  # end of the Silver clicks types
     "silver_clicks_rejected": {                                         # rejected clicks, partition key included
         "source_month": "string", "year": "bigint", "month": "bigint", "day": "bigint",  # key and source date
         "click_number_in_visit": "bigint", "country_code": "bigint", "visit_id": "bigint", "category_code": "bigint",  # source codes
@@ -37,8 +37,8 @@ PINNED_TYPES = {                                                        # the T1
         "price_usd": "bigint", "price_above_category_average_code": "bigint", "page_number_in_shop": "bigint",  # price and page
         "click_id": "string", "click_time_synthetic": "timestamp", "device_type_synthetic": "string",  # built fields
         "received_time": "timestamp", "data_source": "string", "rejection_reason": "string", "rejected_time": "timestamp",  # audit fields
-    },
-}
+    },                                                                  # end of the rejected clicks types
+}                                                                       # end of the pinned types
 
 
 def test_ddl_types_match_the_pinned_t1a_types():                        # a silent bigint -> int drift must fail

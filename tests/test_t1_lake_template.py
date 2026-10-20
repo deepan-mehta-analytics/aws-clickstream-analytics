@@ -1,4 +1,4 @@
-# ── Tests: tier T1a template specifics and its link to the code ─
+# ── Tests: tiers T1a/T1b template specifics and its link to the code ─
 import ast                                                              # read the Glue script's argument list
 from pathlib import Path                                                # file paths
 
@@ -132,7 +132,7 @@ ICEBERG_CONF = [                                                        # the fi
     "spark.sql.catalog.glue_catalog.warehouse=s3://${SilverBucket}/",   # warehouse = the Silver bucket
     "spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog",  # Glue Data Catalog
     "spark.sql.catalog.glue_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO",  # S3 file access
-]
+]                                                                       # end of the five settings
 
 
 def test_silver_tables_are_not_in_the_template():                       # Athena creates them from sql/ddl/
@@ -153,8 +153,12 @@ def test_glue_job_enables_iceberg():                                    # --data
 
 
 def test_glue_role_catalog_access_is_scoped():                          # least privilege on the Data Catalog
-    statements = RESOURCES["GlueJobRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]  # role statements
-    glue = [s for s in statements if any(a.startswith("glue:") for a in ([s["Action"]] if isinstance(s["Action"], str) else s["Action"]))]  # statements with glue: actions
+    glue = []                                                           # every statement with a glue: action, across all inline policies
+    for policy in RESOURCES["GlueJobRole"]["Properties"]["Policies"]:   # each inline policy on the role
+        for s in policy["PolicyDocument"]["Statement"]:                 # each statement in it
+            actions = [s["Action"]] if isinstance(s["Action"], str) else s["Action"]  # action list, whatever its shape
+            if any(a.startswith("glue:") for a in actions):             # touches the Data Catalog
+                glue.append(s)                                          # keep it
     assert len(glue) == 1 and glue[0]["Effect"] == "Allow"              # one Allow statement for the catalog
     assert sorted(glue[0]["Action"]) == sorted(GLUE_ACTIONS)            # exactly those actions, no duplicates
     prefix = "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:"  # built, never a literal account
