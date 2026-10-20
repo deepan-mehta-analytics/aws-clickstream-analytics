@@ -21,6 +21,21 @@ def test_ddl_columns_match_the_code():                                  # column
     assert [c for c, _ in ddl_columns(ddl["silver_deleted_visits"])] == ["visit_id", "deleted_time", "reason", "bronze_key"]  # deleted visits
 
 
+def template_types(resource: str, next_resource: str) -> dict[str, str]:  # column -> Glue type from the T1a template
+    text = (REPO / "infra" / "t1-lake" / "template.yaml").read_text(encoding="utf-8")  # template text
+    block = text.split(f"  {resource}:", 1)[1].split(f"  {next_resource}:", 1)[0]  # just that resource
+    return dict(re.findall(r"\{ Name: (\w+), Type: (\w+) \}", block))      # name -> type, partition key included
+
+
+def test_ddl_types_match_the_t1a_template():                            # a silent bigint -> int drift must fail
+    ddl = load_ddl()                                                    # table name -> SQL text
+    clicks = template_types("SilverClicksTable", "BronzeSourceClicksTable")  # Silver clicks types
+    rejected = template_types("SilverClicksRejectedTable", "GoldClicksTable")  # rejected types
+    assert dict(ddl_columns(ddl["silver_clicks"])) == clicks            # same name and type per column
+    assert dict(ddl_columns(ddl["silver_clicks_rejected"])) == rejected  # same name and type per column
+    assert ddl_columns(ddl["silver_deleted_visits"]) == [("visit_id", "bigint"), ("deleted_time", "timestamp"), ("reason", "string"), ("bronze_key", "string")]  # pinned
+
+
 def test_ddl_partitions():                                              # partition column per table
     ddl = load_ddl()                                                    # table name -> SQL text
     assert ddl_partition(ddl["silver_clicks"]) == "click_month"         # by click month
