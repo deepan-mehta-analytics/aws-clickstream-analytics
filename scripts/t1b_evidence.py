@@ -38,6 +38,12 @@ mask_text = t1a.mask_text                                               # accoun
 mask_json = t1a.mask_json                                               # same, over JSON values
 expected_counts = t1a.expected_counts                                   # per-month counts from the local twin
 
+# ── Reuse the Bronze erase script's row removal (loaded by path) ─
+_ERASE_PATH = Path(__file__).resolve().parent / "t1b_erase_visit_from_bronze.py"  # sibling script
+_erase_spec = importlib.util.spec_from_file_location("t1b_erase_visit_from_bronze", _ERASE_PATH)  # module spec
+_erase = importlib.util.module_from_spec(_erase_spec)                   # empty module
+_erase_spec.loader.exec_module(_erase)                                  # run it
+
 # ── Constants ─────────────────────────────────────────────────
 DEFAULT_SEED = 20261020                                                 # fixed seed for visit A (spec section 3.3)
 EXCLUDED_MONTH = "2008-08"                                              # August is never touched by the delete evidence
@@ -71,17 +77,7 @@ def pick_visit(source: Path, seed: int = DEFAULT_SEED) -> tuple[int, str]:  # (v
 
 
 def filter_visit_lines(raw: bytes, visit_id: int) -> bytes:             # source bytes minus one visit's lines
-    lines = raw.splitlines(keepends=True)                               # bytes split only on CR/LF, each line keeps its ending
-    header = lines[0].decode("utf-8-sig").rstrip("\r\n").split(";")     # column names (a leading BOM is ignored)
-    position = header.index("session ID")                               # where the visit ID sits
-    target = str(int(visit_id)).encode("utf-8")                         # the visit ID as it appears in the file
-
-    def is_visit(line: bytes) -> bool:                                  # does this line belong to the visit?
-        fields = line.rstrip(b"\r\n").split(b";")                       # the line's values
-        return len(fields) > position and fields[position] == target    # blank or short lines are never the visit
-
-    kept = [lines[0]] + [line for line in lines[1:] if not is_visit(line)]  # header plus every other line
-    return b"".join(kept)                                               # same bytes apart from the removed lines
+    return _erase.remove_visit_rows(raw, visit_id)[0]                   # one implementation, shared with the Bronze erase script
 
 
 def expected_counts_without(source: Path, visit_id: int) -> dict:      # expected_counts minus one visit
