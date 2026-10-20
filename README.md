@@ -94,7 +94,7 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 
 - 🔍 **Research first** — every claim in the original brief is re-verified and logged in [`docs/GAPS.md`](docs/GAPS.md) before adoption
 - 📏 **Measured results only** — no number is reported unless it came from a real run
-- 📝 **Decisions on record** — five accepted ADRs and a cost-tier annex in [`docs/adr/`](docs/adr/)
+- 📝 **Decisions on record** — five accepted ADRs, one proposed, and a cost-tier annex in [`docs/adr/`](docs/adr/)
 - 💰 **Cost-disciplined and public-safe** — every tier priced in rupees first, torn down after use, placeholders for every account identifier
 
 ---
@@ -189,10 +189,10 @@ flowchart LR
 
 | Tier | Scope | Status |
 |---|---|---|
-| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0005 accepted; a few gaps open |
+| 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0005 accepted, ADR-0006 proposed; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
 | T1a | Core lake: Lambda → S3 → Glue → Athena | ✅ Run on AWS 2026-10-19: 4 of 4 Athena checks matched the local twin, bookmark proven; torn down the same day |
-| T1b–T1d | Iceberg Silver, ingest extras, evidence pass | ⏳ |
+| T1b–T1d | Iceberg Silver, ingest extras, evidence pass | 🔄 T1b designed ([ADR-0006](docs/adr/0006-iceberg-silver.md), proposed); not yet run |
 | T2 | Orchestration, data-quality alerts, monitoring | ⏳ |
 | T3 + T4 | Streaming window + Redshift Serverless window | ⏳ |
 | T5 | Streamlit dashboard | ⏳ |
@@ -203,6 +203,7 @@ Design decisions are recorded as ADRs:
 - [ADR-0003: data model](docs/adr/0003-data-model.md)
 - [ADR-0004: infrastructure as code (SAM + CloudFormation) and security baseline](docs/adr/0004-iac-sam-cloudformation.md)
 - [ADR-0005: T1a batch lake design (Spark on Glue, one bucket per layer, projection tables)](docs/adr/0005-t1-batch-lake-design.md), status Accepted
+- [ADR-0006: T1b Iceberg Silver (Athena-created v2 tables, erasure across all layers)](docs/adr/0006-iceberg-silver.md), status Proposed
 
 ---
 
@@ -240,7 +241,7 @@ aws-clickstream-analytics/
 ├── tests/                           ← 139 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
-│   ├── adr/                         ← ADRs 0001–0005 (all accepted) + cost-tier annex
+│   ├── adr/                         ← ADRs 0001–0005 (accepted), 0006 (proposed) + cost-tier annex
 │   ├── data-dictionary.md           ← every table and column in plain words
 │   ├── cost-model.md                ← verified AWS prices and teardown log
 │   ├── exam-guide-map.md            ← DEA-C01 skills-coverage matrix (120 skills)
