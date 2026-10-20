@@ -60,7 +60,7 @@ def make_evidence(folder: Path, break_one: bool) -> tuple[dict, dict]:  # write 
         "run2_input_files.json": {"input_files": 1},                    # bookmark
         "files_before_migration.json": [{"path": "a", "size": 1, "last_modified": "t"}],  # April-July files
         "files_after_migration.json": [{"path": "a", "size": 1, "last_modified": "t"}],  # identical
-        "weekend_null_share.json": {"2008-04": 1.0, "2008-08": 0.0},    # NULL share per month
+        "weekend_null_share.json": {"2008-04": 1.0},                    # NULL share per month (April only in this fixture)
         "weekend_mismatches.json": {"mismatched_rows": 0},              # August values vs local twin
         "before_delete_counts.json": {"silver_clicks_by_month": before["silver_clicks_by_month"]},  # step 8
         "after_delete_counts.json": {"visit_rows_in_silver_clicks": 0, "rejects_rows_deleted": 0, "silver_clicks_by_month": after["silver_clicks_by_month"]},  # step 9
@@ -71,7 +71,7 @@ def make_evidence(folder: Path, break_one: bool) -> tuple[dict, dict]:  # write 
         "run3_input_files.json": {"input_files": 1},                    # bookmark
         "gold_after_run3.json": {"visits_by_month": after["gold_visits_by_month"], "clicks_by_month": after["silver_clicks_by_month"]},  # Gold
         "final_counts.json": after,                                     # everything per month
-    }
+    }  # end of the evidence files
     if break_one:                                                       # one deliberate mismatch
         files["final_counts.json"] = {**after, "silver_clicks_by_month": {"2008-04": 8}}  # one click too many
     for name, content in files.items():                                 # write them
@@ -99,11 +99,61 @@ def test_t1b_checks_missing_file_fails(tmp_path):                       # absent
 
 
 def test_masked_output_has_no_account_ids_or_version_ids():             # public-safe output
-    raw = {"VersionId": "3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY", "note": f"acct {FAKE_ACCOUNT_ID} key abcdEFGH1234abcdEFGH1234abcdEFGH visit 4321", "id": "uci553-4321-1"}  # one of each
+    raw = {"VersionId": "3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY", "note": f"acct {FAKE_ACCOUNT_ID} key abcdEFGH1234abcdEFGH1234abcdEFGH", "visit_id": 4321, "id": "uci553-4321-1"}  # one of each
     text = json.dumps(evidence.mask_everything(raw, 4321))              # masked JSON text
     assert not re.search(r"(?<![0-9])[0-9]{12}(?![0-9])", text)         # no 12-digit numbers
     assert "3sL4kq" not in text and "abcdEFGH1234" not in text          # no version-id-shaped strings
     assert "4321" not in text and "visit A" in text                     # visit id replaced by the label
+
+
+def test_masking_is_field_scoped_and_keeps_colliding_numbers():         # no free-text number swap
+    raw = {"visit_id": 12, "row_count": 12, "size": 12, "date": "2008-04-12 12:00", "path": "x/12/y", "id": "uci553-12-3"}  # 12 collides with a count, a size and date parts
+    masked = evidence.mask_everything(raw, 12)                          # masked copy
+    assert masked["visit_id"] == "visit A"                              # the visit field is masked whatever its type
+    assert masked["row_count"] == 12 and masked["size"] == 12           # counts and sizes stay numbers
+    assert masked["date"] == "2008-04-12 12:00" and masked["path"] == "x/12/y"  # date and path untouched
+    assert masked["id"] == "uci553-visit A-3"                           # click id loses only its visit part
+
+
+def test_masking_round_trips_null_version_id_and_stays_valid_json():    # nulls and numbers do not crash
+    raw = {"VersionId": None, "row_count": 4321, "visit_id": None, "items": [{"VersionId": "3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY"}]}  # null version, number equal to the id
+    masked = evidence.mask_everything(raw, 4321)                        # masked copy
+    assert masked["VersionId"] is None and masked["visit_id"] is None   # nulls stay null
+    assert masked["row_count"] == 4321                                  # count untouched
+    assert masked["items"][0]["VersionId"] == "<version-id>"            # string version masked
+    assert json.loads(json.dumps(masked)) == masked                     # valid JSON
+
+
+def test_weekend_share_fails_when_a_month_is_missing(tmp_path):         # expected months come from the local run
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    before["silver_clicks_by_month"] = {"2008-04": 10, "2008-08": 5}    # local run has two months
+    (tmp_path / "weekend_null_share.json").write_text(json.dumps({"2008-04": 1.0}), encoding="utf-8")  # August missing
+    assert evidence.t1b_checks(tmp_path, before, after)["weekend_null_share"]["pass"] is False  # fails
+    (tmp_path / "weekend_null_share.json").write_text("{}", encoding="utf-8")  # empty file
+    assert evidence.t1b_checks(tmp_path, before, after)["weekend_null_share"]["pass"] is False  # also fails
+
+
+def test_files_replaced_fails_on_empty_step8_list(tmp_path):            # nothing to replace is not a pass
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    (tmp_path / "files_step8.json").write_text("[]", encoding="utf-8")  # empty list
+    assert evidence.t1b_checks(tmp_path, before, after)["files_replaced"]["pass"] is False  # fails
+
+
+def test_expected_counts_without_keeps_other_bytes(tmp_path):           # raw line filtering, CRLF kept
+    source = write_source(tmp_path / "source.csv")                      # fixture
+    kept = evidence.filter_visit_lines(source.read_bytes(), 1)          # bytes without visit 1
+    crlf = bytes([13, 10])                                              # the line ending of the real file (CR LF)
+    assert kept.count(crlf) == source.read_bytes().count(crlf) - 3      # three lines gone, endings intact
+    assert b";1;1;A1;" not in kept and b";2;1;A1;" in kept              # visit 1 gone, visit 2 kept
+
+
+def test_cli_mask_reads_visit_from_private_file(tmp_path, monkeypatch): # the id is never on the command line
+    (tmp_path / "pick.json").write_text(json.dumps({"visit_id": 4321, "month": "2008-04"}), encoding="utf-8")  # private pick
+    (tmp_path / "raw.json").write_text(json.dumps({"visit_id": 4321, "row_count": 4321}), encoding="utf-8")  # raw evidence
+    arguments = ["mask", str(tmp_path / "raw.json"), str(tmp_path / "masked.json"), "--visit-file", str(tmp_path / "pick.json")]  # options
+    monkeypatch.setattr("sys.argv", ["t1b_evidence.py", *arguments])    # pretend these were typed
+    assert evidence.main() == 0                                         # success
+    assert json.loads((tmp_path / "masked.json").read_text(encoding="utf-8")) == {"visit_id": "visit A", "row_count": 4321}  # field-scoped
 
 
 def test_cli_checks_exit_codes(tmp_path, monkeypatch):                  # window script relies on the exit code

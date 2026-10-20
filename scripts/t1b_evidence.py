@@ -14,6 +14,9 @@ Files (all plain JSON, written by the window script from the raw Athena / S3 out
   bronze_versions_after.json                              {"version_count": 1, "contains_visit": false}
   gold_after_run3.json                                    {"visits_by_month": {...}, "clicks_by_month": {...}}
   final_counts.json                                       same keys as `expected_counts`
+SQL 07 (data files of one month) returns rows of (file_path, file_size_in_bytes, record_count). For files_step8.json and
+files_step12.json the window script keeps only the file_path column, as a plain JSON list of path strings. For
+files_before_migration.json / files_after_migration.json it keeps path, size and last-modified time per file.
 """  # module docstring
 
 # ── Imports ───────────────────────────────────────────────────
@@ -41,8 +44,9 @@ EXCLUDED_MONTH = "2008-08"                                              # August
 VISIT_LABEL = "visit A"                                                 # public label; the real ID never appears
 TABLE_NAMES = ["silver_clicks", "silver_clicks_rejected", "silver_deleted_visits"]  # the three Iceberg tables
 S3_VERSION_ID = re.compile(                                             # S3 version ID shape: 32 characters with letters and digits
-    r"(?<![A-Za-z0-9._+/-])(?=[A-Za-z0-9._+]*[0-9])(?=[A-Za-z0-9._+]*[A-Za-z])[A-Za-z0-9._+]{32}(?![A-Za-z0-9._+-])"
-)
+    r"(?<![A-Za-z0-9._+/-])(?=[A-Za-z0-9._+]*[0-9])(?=[A-Za-z0-9._+]*[A-Za-z])[A-Za-z0-9._+]{32}(?![A-Za-z0-9._+-])"  # not part of a longer token
+)  # end of the pattern
+VISIT_KEYS = {"visit_id"}                                              # JSON keys that carry the visit ID
 VERSION_FIELD = re.compile(r'("?VersionId"?\s*[:=]\s*"?)([^\s",}]+)')   # a value that follows a VersionId label
 
 
@@ -66,13 +70,18 @@ def pick_visit(source: Path, seed: int = DEFAULT_SEED) -> tuple[int, str]:  # (v
     return random.Random(seed).choice(candidates)                       # seeded pick
 
 
+def filter_visit_lines(raw: bytes, visit_id: int) -> bytes:             # source bytes minus one visit's lines
+    lines = raw.decode("utf-8").splitlines(keepends=True)               # every line with its own ending (CRLF kept)
+    header = lines[0].rstrip("\r\n").split(";")                         # column names
+    position = header.index("session ID")                               # where the visit ID sits
+    kept = [lines[0]] + [line for line in lines[1:] if line.rstrip("\r\n").split(";")[position] != str(int(visit_id))]  # header plus other visits
+    return "".join(kept).encode("utf-8")                                # same bytes apart from the removed lines
+
+
 def expected_counts_without(source: Path, visit_id: int) -> dict:      # expected_counts minus one visit
-    import pandas as pd                                                 # local only
-    raw = pd.read_csv(source, sep=";")                                  # the raw file with its original column names
-    kept = raw[raw["session ID"] != visit_id]                           # drop that visit's rows
     with tempfile.TemporaryDirectory() as folder:                       # scratch folder
         trimmed = Path(folder) / "trimmed.csv"                          # filtered copy
-        kept.to_csv(trimmed, sep=";", index=False)                      # same ';' layout
+        trimmed.write_bytes(filter_visit_lines(Path(source).read_bytes(), visit_id))  # raw lines, nothing re-serialised
         return expected_counts(trimmed)                                 # the T1a calculation on the filtered file
 
 
@@ -86,12 +95,23 @@ def mask_versions(text: str) -> str:                                    # S3 ver
     return S3_VERSION_ID.sub("<version-id>", text)                      # unlabelled 32-character IDs
 
 
-def mask_everything(value, visit_id: int | None = None):                # JSON value, fully masked
-    masked = mask_json(value)                                           # T1a masking first
-    text = mask_versions(json.dumps(masked))                            # then version IDs on the JSON text
-    if visit_id is not None:                                            # visit label only when we know the ID
-        text = mask_visit(text, visit_id)                               # replace the visit ID
-    return json.loads(text)                                             # back to a JSON value
+def mask_string(text: str, visit_id: int | None) -> str:                # one string value, masked
+    text = mask_versions(mask_text(text))                               # T1a masking, then version IDs
+    if visit_id is not None:                                            # only when we know the ID
+        text = re.sub(rf"(uci553-){int(visit_id)}(-)", rf"\g<1>{VISIT_LABEL}\g<2>", text)  # the visit part of a click id, nothing else
+    return text                                                         # masked string
+
+
+def mask_everything(value, visit_id: int | None = None, key: str | None = None):  # parsed JSON, masked field by field
+    if isinstance(value, dict):                                         # object
+        return {mask_text(str(name)): mask_everything(item, visit_id, str(name)) for name, item in value.items()}  # keep the key for context
+    if isinstance(value, list):                                         # list
+        return [mask_everything(item, visit_id, key) for item in value]  # each item under the same key
+    if key in VISIT_KEYS and value is not None:                         # a field that carries the visit
+        return VISIT_LABEL                                              # label, whatever the type
+    if isinstance(value, str):                                          # text
+        return "<version-id>" if key == "VersionId" else mask_string(value, visit_id)  # version values are replaced whole
+    return value                                                        # numbers, booleans, null stay as they are
 
 
 # ── Checks (one entry per spec section 5 line) ────────────────
@@ -124,7 +144,7 @@ def t1b_checks(evidence_dir: Path, expected_before: dict, expected_after: dict) 
     add("run2_input_files", "run 2 read exactly 1 input file", 1, field(load("run2_input_files.json"), "input_files"))  # bookmark
     add("files_unchanged_across_migration", "April-July data files identical before and after the migration", load("files_before_migration.json") or "missing", load("files_after_migration.json"))  # path, size, time
     share = load("weekend_null_share.json")                            # NULL share per month
-    expected_share = None if share is None else {month: (0.0 if month == EXCLUDED_MONTH else 1.0) for month in share}  # August 0, others 1
+    expected_share = {month: (0.0 if month == EXCLUDED_MONTH else 1.0) for month in expected_before["silver_clicks_by_month"]}  # months from the local run: August 0, others 1
     add("weekend_null_share", "weekend_click NULL share 1.0 for April-July and 0.0 for August", expected_share, share)  # D2 evidence
     add("weekend_values_match", "August weekend_click rows differing from the local twin", 0, field(load("weekend_mismatches.json"), "mismatched_rows"))  # per-row equality
     add("pre_delete_counts", "Silver clicks per month before the delete match the local run", expected_before["silver_clicks_by_month"], field(load("before_delete_counts.json"), "silver_clicks_by_month"))  # step 8
@@ -134,7 +154,7 @@ def t1b_checks(evidence_dir: Path, expected_before: dict, expected_after: dict) 
     travel10 = load("time_travel_step10.json")                          # step 10 result
     add("time_travel_returns_visit", "step 10 time travel still returns rows of visit A (more than 0)", True, None if travel10 is None else (field(travel10, "row_count") or 0) > 0)  # merge-on-read only hides
     before_files, after_files = load("files_step8.json"), load("files_step12.json")  # data file lists
-    add("files_replaced", "step 12 data files share no path with step 8's list", True, None if before_files is None or after_files is None else not (set(before_files) & set(after_files)))  # OPTIMIZE rewrote them
+    add("files_replaced", "step 12 data files share no path with step 8's list", True, None if not before_files or after_files is None else not (set(before_files) & set(after_files)))  # OPTIMIZE rewrote them
     travel14 = load("time_travel_step14.json")                          # step 14 result
     add("time_travel_fails", "step 14 time travel errors (snapshot expired)", True, None if travel14 is None else bool(field(travel14, "error")) and "row_count" not in travel14)  # VACUUM expired it
     add("bronze_clean", "Bronze key has exactly one version and no visit A", {"version_count": 1, "contains_visit": False}, load("bronze_versions_after.json"))  # step 15
@@ -165,7 +185,7 @@ def main() -> int:                                                      # entry 
     msk = sub.add_parser("mask")                                        # public-safe copy
     msk.add_argument("source", type=Path)                               # raw JSON
     msk.add_argument("target", type=Path)                               # masked JSON
-    msk.add_argument("--visit-id", type=int, default=None)              # replaced by "visit A"
+    msk.add_argument("--visit-file", type=Path, default=None)           # private pick-visit JSON; its visit ID becomes "visit A"
     args = parser.parse_args()                                          # read options
     if args.command == "pick-visit":                                   # choose visit A
         visit_id, month = pick_visit(args.source, args.seed)            # pick
@@ -181,7 +201,8 @@ def main() -> int:                                                      # entry 
     if args.command == "mask":                                         # public-safe copy
         args.target.parent.mkdir(parents=True, exist_ok=True)           # folder
         raw = json.loads(args.source.read_text(encoding="utf-8"))       # raw JSON
-        args.target.write_text(json.dumps(mask_everything(raw, args.visit_id), indent=2), encoding="utf-8")  # save masked
+        visit_id = json.loads(args.visit_file.read_text(encoding="utf-8"))["visit_id"] if args.visit_file else None  # ID read from the private file, never typed
+        args.target.write_text(json.dumps(mask_everything(raw, visit_id), indent=2), encoding="utf-8")  # save masked
         return 0                                                        # success
     results = t1b_checks(args.evidence_dir, json.loads(args.expected_before.read_text(encoding="utf-8")), json.loads(args.expected_after.read_text(encoding="utf-8")))  # run checks
     args.output.parent.mkdir(parents=True, exist_ok=True)               # folder
