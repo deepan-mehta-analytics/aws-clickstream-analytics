@@ -61,6 +61,23 @@ def test_window_never_prints_the_visit_id():                            # the co
     assert echoes == []                                                 # never
 
 
+def test_window_guards_step8_paths_before_vacuum():                   # an S3 key-form mismatch cannot fake files_step8_deleted
+    text = read(WINDOW)                                                 # window source
+    step13 = text[text.index("# ── Step 13"):text.index("# ── Step 14")]  # the step 13 section
+    assert step13.index("Assert-FilesListedInS3 $filesStep8") < step13.index("VACUUM clickstream_t1")  # guard runs before VACUUM
+
+
+def test_snapshot_and_time_travel_sql_take_a_table_placeholder():      # both Silver tables through one reviewed file each
+    snapshot_sql = read(REPO / "sql/validation/t1b/06_latest_snapshot.sql")  # SQL 06
+    travel_sql = read(REPO / "sql/validation/t1b/08_time_travel.sql")  # SQL 08
+    assert '"clickstream_t1"."{table}$snapshots"' in snapshot_sql      # same quoting as SQL 09
+    assert '"clickstream_t1"."{table}" FOR VERSION AS OF {snapshot_id}' in travel_sql  # version travel on any table
+    assert "silver_clicks" not in snapshot_sql + travel_sql            # no hard-coded table left
+    text = read(WINDOW)                                                 # window source
+    assert "Read-TableSql" not in text                                  # the text-replace helper is gone
+    assert "-Parameters @{ table = $table }" in text and "@{ table = $table; snapshot_id" in text  # the window fills {table}
+
+
 # ── Teardown: drops the three tables, then the T1a teardown ───
 def test_teardown_drops_exactly_the_three_tables_before_the_t1a_teardown():  # spec section 6 risk 6
     text = read(TEARDOWN)                                               # teardown source
@@ -97,7 +114,7 @@ def test_scripts_parse_with_the_powershell_parser(script):              # syntax
 HELPER_HARNESS = r"""
 param([string]$WindowPath, [string]$Work, [string]$ResultPath)               # window file, fake TEMP folder, JSON answers
 $ErrorActionPreference = "Stop"                                              # any harness error fails the test
-$names = @("Hide-Visit", "Get-InputFileCount", "Remove-SqlCommentLines", "Read-AthenaRows", "Read-AthenaPairs", "Get-FormatVersions", "ConvertTo-TimeTravelFact", "Get-SilverClickObjectTimes", "Get-FilesStillInS3")  # helpers under test
+$names = @("Hide-Visit", "Get-InputFileCount", "Remove-SqlCommentLines", "Read-AthenaRows", "Read-AthenaPairs", "Get-FormatVersions", "ConvertTo-TimeTravelFact", "Get-SilverClickObjectTimes", "Get-FilesStillInS3", "Assert-FilesListedInS3")  # helpers under test
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($WindowPath, [ref]$null, [ref]$null)  # parse only, never run the window
 $found = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $names }, $true)  # the function definitions
 foreach ($function in $found) { . ([scriptblock]::Create($function.Extent.Text)) }  # define each one here
@@ -150,6 +167,8 @@ $script:showProperties = Save-Result "properties2" @(@("prpt_name", "prpt_value"
 $answers.versions_direct = Get-FormatVersions 14                             # read from SHOW TBLPROPERTIES
 # ── Get-FilesStillInS3 ──
 $answers.left = @(Get-FilesStillInS3 @("s3://example/clicks/data/a.parquet", "s3://example/clicks/data/b.parquet") "after_vacuum")  # a is still listed
+$answers.guard_ok = Get-Error { Assert-FilesListedInS3 @("s3://example/clicks/data/a.parquet") "before_vacuum" }  # every path listed: no error
+$answers.guard_unmatched = Get-Error { Assert-FilesListedInS3 @("s3://example/clicks/data/a.parquet", "clicks/data/b.parquet", "s3://example/clicks/data/c.parquet") "before_vacuum" }  # two paths the listing does not share
 $answers.aws_calls = $script:awsCalls                                        # for the call-shape asserts
 $answers | ConvertTo-Json -Depth 10 | Set-Content $ResultPath                # answers for pytest
 """  # end of the PowerShell harness
@@ -167,7 +186,7 @@ def test_window_helpers_behave_on_fixtures(tmp_path):                   # the he
     result = subprocess.run([pwsh, "-NoProfile", "-File", str(harness), "-WindowPath", str(WINDOW), "-Work", str(work), "-ResultPath", str(answers_path)], capture_output=True, text=True, timeout=120)  # run it
     assert result.returncode == 0, result.stdout + result.stderr        # the harness itself ran
     answers = json.loads(answers_path.read_text(encoding="utf-8-sig"))  # answers (any BOM dropped)
-    assert len(answers["defined"]) == 9                                 # every helper was found in the window
+    assert len(answers["defined"]) == 10                                # every helper was found in the window
     assert answers["rows_count"] == 2 and answers["null_is_null"] is True  # header dropped, NULL kept as null
     assert "sql/fixture/counts.sql" in answers["missing_column"] and "visits" in answers["missing_column"]  # names the file and column
     assert "NULL" in answers["pairs_null"] and "sql/fixture/counts.sql" in answers["pairs_null"]  # NULL stops, naming the file
@@ -184,6 +203,9 @@ def test_window_helpers_behave_on_fixtures(tmp_path):                   # the he
     assert "example" not in json.dumps(answers["versions_fallback"])    # no bucket name in the fact
     assert sum("glue get-table" in call for call in answers["aws_calls"]) == 3  # one metadata lookup per table, fallback only
     assert answers["left"] == ["s3://example/clicks/data/a.parquet"]    # only the still-listed step-8 file
+    assert answers["guard_ok"] == ""                                    # matching paths pass the pre-VACUUM guard
+    assert answers["guard_unmatched"].startswith("step 13: 2 of 3 ")    # unmatched paths stop step 13, counted
+    assert "example" not in answers["guard_unmatched"]                  # no path or bucket name in the message
 
 
 # ── Makefile and README rows ──────────────────────────────────

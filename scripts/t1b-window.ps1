@@ -114,15 +114,6 @@ function Remove-SqlCommentLines([string]$Text) {                        # drop f
     return ($kept -join "`n")                                           # the statement lines, unchanged
 }
 
-function Read-TableSql([string]$SqlPath, [string]$Table) {              # a silver_clicks SQL file pointed at another Silver table
-    $text = Get-Content $SqlPath -Raw                                   # the reviewed SQL (written for silver_clicks)
-    if ($Table -eq "silver_clicks") { return $text }                    # nothing to change
-    if ($Table -notin $silverTables) { throw "$SqlPath can only be pointed at $($silverTables -join ' or '), not $Table" }  # only the two Silver tables
-    $pattern = "(?<![A-Za-z_])silver_clicks(?![A-Za-z_])"               # the table name as a whole word (not silver_clicks_rejected)
-    if (-not [regex]::IsMatch($text, $pattern)) { throw "$SqlPath does not name silver_clicks, so it cannot be pointed at $Table" }  # the file changed shape
-    return [regex]::Replace($text, $pattern, $Table)                    # same query, other table (TEMP copy only)
-}
-
 function Invoke-AthenaSql([string]$Name, [string]$Text, [hashtable]$Parameters = @{}, [string]$Source = "inline SQL", [switch]$AllowFailure) {  # run one statement, save its raw result to TEMP
     $Text = Remove-SqlCommentLines $Text                                # full-line comments never reach Athena
     foreach ($key in $Parameters.Keys) {                                # each {placeholder} the SQL uses
@@ -263,6 +254,14 @@ function ConvertTo-TimeTravelFact($Attempt, [string]$Table, [string]$SnapshotId)
     throw "step 14: time travel on $Table ended $($Attempt.state) for a reason other than a missing or expired snapshot: $reason"  # expired login, throttling, permissions: never counted as proof
 }
 
+function Assert-FilesListedInS3([string[]]$Paths, [string]$Label) {    # before VACUUM: every step-8 path must match a key in the S3 listing
+    $times = Get-SilverClickObjectTimes $Label                          # every current Silver clicks object
+    $unmatched = @($Paths | Where-Object { -not $times.ContainsKey($_) }).Count  # paths whose form the listing does not share
+    if ($unmatched -gt 0) {                                             # the after-VACUUM check could pass falsely
+        throw "step 13: $unmatched of $(@($Paths).Count) step-8 data files are not in the S3 listing before VACUUM, so the after-VACUUM file check cannot be trusted (listing saved under %TEMP%, s3 folder)"  # counts only: the paths hold the bucket name
+    }
+}
+
 function Get-FilesStillInS3([string[]]$Paths, [string]$Label) {        # which of these data files S3 still holds
     $times = Get-SilverClickObjectTimes $Label                          # every current Silver clicks object
     return @($Paths | Where-Object { $times.ContainsKey($_) })          # paths still present (none expected after VACUUM)
@@ -391,7 +390,7 @@ try {                                                                   # the ma
     $record.snapshots_step8 = [ordered]@{}                              # table -> snapshot ID, commit time, operation
     foreach ($table in $silverTables) {                                 # both Silver tables visit A is deleted from
         $snapshotSource = "sql/validation/t1b/06_latest_snapshot.sql ($table)"  # named in any failure
-        $snapshot = @(Read-AthenaRows (Invoke-AthenaSql -Name "06_latest_snapshot_step8_$table" -Text (Read-TableSql "sql/validation/t1b/06_latest_snapshot.sql" $table) -Source $snapshotSource) @("snapshot_id", "committed_at", "operation"))  # $snapshots metadata table
+        $snapshot = @(Read-AthenaRows (Invoke-AthenaFile "sql/validation/t1b/06_latest_snapshot.sql" -Name "06_latest_snapshot_step8_$table" -Parameters @{ table = $table }) @("snapshot_id", "committed_at", "operation"))  # $snapshots metadata table of that table
         if ($snapshot.Count -eq 0) { throw "step 8: $snapshotSource returned no snapshot for $table (run 1 should have committed one)" }  # nothing to time travel to
         if ($snapshot.Count -ne 1) { throw "step 8: $snapshotSource returned $($snapshot.Count) rows for $table, expected 1" }  # one latest snapshot
         $snapshotsStep8[$table] = [string]$snapshot[0].snapshot_id      # the pre-delete snapshot
@@ -417,8 +416,8 @@ try {                                                                   # the ma
     $currentStep = 10                                                   # named in any failure
     $travel10 = [ordered]@{}                                            # table -> {row_count}
     foreach ($table in $silverTables) {                                 # both Silver tables
-        $travelParameters = @{ snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
-        $travelRows = @(Read-AthenaRows (Invoke-AthenaSql -Name "08_time_travel_step10_$table" -Text (Read-TableSql "sql/validation/t1b/08_time_travel.sql" $table) -Parameters $travelParameters -Source "sql/validation/t1b/08_time_travel.sql ($table)") @("row_count"))  # the old snapshot still answers
+        $travelParameters = @{ table = $table; snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
+        $travelRows = @(Read-AthenaRows (Invoke-AthenaFile "sql/validation/t1b/08_time_travel.sql" -Name "08_time_travel_step10_$table" -Parameters $travelParameters) @("row_count"))  # the old snapshot still answers
         if ($travelRows.Count -ne 1) { throw "step 10: sql/validation/t1b/08_time_travel.sql ($table) returned $($travelRows.Count) rows, expected 1" }  # COUNT(*) gives one row
         $travel10[$table] = [ordered]@{ row_count = [long]$travelRows[0].row_count }  # silver_clicks more than 0; rejects 0 (visit A is clean)
     }
@@ -438,6 +437,7 @@ try {                                                                   # the ma
 
 # ── Step 13: VACUUM all three tables ──────────────────────────
     $currentStep = 13                                                   # named in any failure
+    Assert-FilesListedInS3 $filesStep8 "before_vacuum"                  # the same listing helper must see every step-8 file now, or [] later proves nothing
     Start-Sleep -Seconds 65                                             # every pre-delete snapshot is now older than vacuum_max_snapshot_age_seconds (60)
     foreach ($table in @("silver_clicks", "silver_clicks_rejected", "silver_deleted_visits")) {  # every Iceberg table
         Invoke-AthenaSql -Name "vacuum_$table" -Text "VACUUM clickstream_t1.$table" | Out-Null  # expire old snapshots, remove unused files
@@ -449,8 +449,8 @@ try {                                                                   # the ma
     $currentStep = 14                                                   # named in any failure
     $travel14 = [ordered]@{}                                            # table -> {state, error} or {state, row_count}
     foreach ($table in $silverTables) {                                 # both Silver tables
-        $travelParameters = @{ snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
-        $attempt = Invoke-AthenaSql -Name "08_time_travel_step14_$table" -Text (Read-TableSql "sql/validation/t1b/08_time_travel.sql" $table) -Parameters $travelParameters -Source "sql/validation/t1b/08_time_travel.sql ($table)" -AllowFailure  # a snapshot failure is the expected result
+        $travelParameters = @{ table = $table; snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
+        $attempt = Invoke-AthenaFile "sql/validation/t1b/08_time_travel.sql" -Name "08_time_travel_step14_$table" -Parameters $travelParameters -AllowFailure  # a snapshot failure is the expected result
         $travel14[$table] = ConvertTo-TimeTravelFact $attempt $table $snapshotsStep8[$table]  # only a FAILED state naming the snapshot counts; anything else stops here
     }
     Save-Fact "time_travel_step14.json" $travel14                       # per-table results
