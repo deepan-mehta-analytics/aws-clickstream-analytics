@@ -7,7 +7,7 @@ on:                                                       # events that trigger 
 
 jobs:                                                     # jobs run in parallel
   hygiene:                                                # guard against local-only files
-    runs-on: ubuntu-latest                                # Linux runner
+    runs-on: ubuntu-24.04                                 # Linux runner, pinned (ubuntu-latest moves to 26 from 2026-10-19)
     steps:                                                # job steps
       - uses: actions/checkout@v7                         # fetch the repository
       - name: Fail if local-only files are tracked        # .env, CLAUDE.md, workflow_status*.md must never be in git
@@ -15,7 +15,7 @@ jobs:                                                     # jobs run in parallel
           if git ls-files | grep -E '(^|/)(\.env(\.[^/]*)?|CLAUDE\.md|workflow_status[^/]*\.md)$' | grep -vE '(^|/)\.env\.example$'; then echo "Local-only file is tracked"; exit 1; fi
 
   test:                                                   # lint and unit tests
-    runs-on: ubuntu-latest                                # Linux runner
+    runs-on: ubuntu-24.04                                 # Linux runner, pinned (ubuntu-latest moves to 26 from 2026-10-19)
     steps:                                                # job steps
       - uses: actions/checkout@v7                         # fetch the repository
       - uses: actions/setup-python@v7                     # install Python
