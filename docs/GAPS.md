@@ -42,6 +42,20 @@ owner-run window.
 | G-18 | The ingest Lambda can reserve 1 unit of concurrency (one run at a time) | This account's Lambda concurrency quota in `ap-south-1` | First T1a deploy, 2026-10-05: CREATE_FAILED "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [10]"; `aws lambda get-account-settings` shows `ConcurrentExecutions` 10 (the documented default is 1,000; [Lambda troubleshooting](https://docs.aws.amazon.com/lambda/latest/dg/troubleshooting-deployment.html): "New AWS accounts have reduced concurrency and memory quotas", fetched 2026-10-05) | The cap is now the template parameter `IngestReservedConcurrency` (default 0 = no reservation). Nothing triggers the Lambda automatically, the window script invokes it one month at a time, it skips months already in Bronze and stops after 60 s. The owner has requested a quota increase; once granted, a later window deploys with `IngestReservedConcurrency=1` to show skill 1.4.2. **Resolved 2026-10-19:** AWS raised the quota; `get-account-settings` showed `ConcurrentExecutions` 1,000, and the stack deployed with `IngestReservedConcurrency=1` (`get-function-concurrency` returned 1) | ✅ Resolved |
 | G-19 | The account can create AWS Glue jobs in `ap-south-1` | Whether Glue is enabled for this account | Second T1a deploy, 2026-10-05: the Glue job failed with "Account … is denied access (Service: Glue, Status Code: 400)" while deploying as an administrator; the message names the account, not an IAM action. Public reports of the same message on newer accounts say AWS Support must lift it | Stack rolled back; the owner deletes it and opens an AWS Support case (Account and billing) asking AWS to enable Glue. The T1a window is paused until AWS confirms; rerun from `sam build`. **Resolved 2026-10-19:** AWS Support enabled Glue; the Glue job was created during the stack deploy and ran twice | ✅ Resolved |
 
+Rows G-20 to G-25 were added on 2026-10-21 from the T1b design
+([ADR-0006](adr/0006-iceberg-silver.md), proposed) and its code review; all
+are settled by the T1b owner window, and each one stops the window at a named
+step if the assumption is wrong.
+
+| ID | Assumption | What to verify | How | Decision | Status |
+|---|---|---|---|---|---|
+| G-20 | The job bookmark reprocesses a Bronze file that was rewritten in place (design risk 1) | That run 3 reads exactly the rewritten month | [Glue job bookmarks](https://docs.aws.amazon.com/glue/latest/dg/monitor-continuations.html): "For Amazon S3 input sources, AWS Glue job bookmarks check the last modified time of the objects … If your input source data has been modified since your last job run, the files are reprocessed" (read 2026-10-20); then run 3 | If run 3 reads 0 files the window stops and prints the fallback (reset the bookmark, the owner's call). A plain reset re-reads all five months: safe (monthly overwrite plus the deleted-visits filter), but the 1-file check then fails and needs a note | ⏳ Open |
+| G-21 | Athena (Iceberg 1.4.2 reader) reads a v2 table written by Glue 6.0's Iceberg 1.11.0 (design risk 2) | Athena's counts after run 1 | Step 3 runs a count query over the four months before anything else depends on it | Both sides speak format v2; the job refuses to write anything that is not v2 | ⏳ Open |
+| G-22 | The format version can be read for an Athena-created Iceberg table | Where the `format-version` property is visible | [Athena SHOW TBLPROPERTIES for Iceberg](https://docs.aws.amazon.com/athena/latest/ug/querying-iceberg-show-table-properties.html): "Only Athena-supported table properties are shown" (read 2026-10-21), and `format-version` is not one of them | The window tries `SHOW TBLPROPERTIES`, then reads `"format-version"` from the table's metadata file via the Glue table's `metadata_location` parameter, recording which source answered. Whether Athena-created tables carry that parameter is still unverified | ⏳ Open |
+| G-23 | Athena's error for time travel to an expired snapshot mentions the snapshot | The error text at step 14 | The window accepts only a `FAILED` query whose error names the snapshot (or its ID) | Anything else (expired login, throttling, permissions) stops the window instead of counting as proof | ⏳ Open |
+| G-24 | `VACUUM` deletes the step-8 data files, not just the snapshots | The S3 file list after `VACUUM` | [Athena VACUUM](https://docs.aws.amazon.com/athena/latest/ug/vacuum-statement.html): without `s3:DeleteObject` "the VACUUM query will succeed, but the files will not be deleted" (read 2026-10-20) | The window lists the files before and after; the check expects none of step 8's files left. The rejects table may keep its last snapshot (visit A has no rejects, so no new commit there), which the check allows | ⏳ Open |
+| G-25 | `CAST(current_timestamp AS timestamp(6))` inserts into an Iceberg `timestamp` column | The step-9 `INSERT` into `silver_deleted_visits` | [Athena engine v3 notes](https://docs.aws.amazon.com/athena/latest/ug/engine-versions-reference-0003.html) document precision 6 only as the fix for `CREATE TABLE AS` | If Athena refuses it, step 9 stops with the query ID | ⏳ Open |
+
 Add a row whenever research contradicts the brief. Resolved rows stay in the
 table with their decision, so the reasoning remains auditable.
 
@@ -64,8 +78,10 @@ and 9 not planned. History: ADR-0004 moved 1.4.6 and 1.4.8 to planned, and
 priced in Mumbai (about ₹165 in total, estimates; see `cost-model.md` §3 D).
 One of the 18, 4.4.3 (CloudTrail Lake), returned to not planned the same day
 because the service closed to new customers (L-05). The thinnest domain is
-still 4 (Security and Governance), now with 19 of 29 planned. The 9
-remaining not-planned skills are accepted limitations (§3).
+still 4 (Security and Governance), now with 19 of 29 planned. On
+2026-10-21, 2.4.3 (schema conversion) moved to planned when L-03 was lifted,
+giving 104 planned, 8 stretch and 8 not planned. The 8 remaining
+not-planned skills are accepted limitations (§3).
 
 ---
 
@@ -78,6 +94,6 @@ a bullet in the README's Known Limitations.
 |---|---|---|
 | L-01 | No Transfer Family demo (2.1.4) | An endpoint costs about ₹34 per hour while it exists, about ₹25,000 a month if forgotten; too large a leak risk with no free credits (owner, 2026-10-05) |
 | L-02 | No SageMaker Unified Studio, Catalog projects, business catalog or lineage tooling (2.2.6, 2.4.4, 4.1.7, 4.5.6) | No Mumbai prices in the AWS Price List API (2026-10-05), and a domain creates resources underneath; unpriced work is not started |
-| L-03 | No schema conversion between database engines (2.4.3) | Needs a paid source database, and nothing in this project migrates |
+| ~~L-03~~ | ~~No schema conversion between database engines (2.4.3)~~ | **Lifted 2026-10-21 (owner ruling 2026-10-20):** 2.4.3 is planned as its own small slice near T4, converting a local Docker MySQL schema with the AWS Schema Conversion Tool against a virtual target, so no paid source or target database is needed (₹0). It moves back here if that path fails |
 | L-04 | No cross-account encryption or Region-blocking SCP (4.3.3, 4.5.3) | Both need AWS Organizations and a second account: an owner-only governance change, and a closed account takes 90 days to clean up. Cost is not the blocker (a KMS key is about ₹114 per month; SCPs are free) |
 | L-05 | No CloudTrail Lake demo (4.4.3) | CloudTrail Lake closed to new customers on 2026-05-31 and this account never used it ([AWS notice](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-lake-service-availability-change.html), fetched 2026-10-05). AWS recommends CloudWatch instead; T2 already queries CloudTrail events with CloudWatch Logs Insights (4.4.4). Exam guide v1.1 still lists the skill, so it is studied as a concept |

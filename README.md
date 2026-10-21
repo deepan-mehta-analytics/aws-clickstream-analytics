@@ -25,6 +25,7 @@ and which products make them leave after one click.
 - 💰 **Priced before it's built, then checked against the bill** — the AWS version is built in small tiers, each priced in rupees first; the T1a run's measured bill was **≈ ₹3.33** against an estimate of ≈ ₹12
 - 🧱 **Infrastructure as code** — an AWS SAM + CloudFormation stack, checked by guardrail tests and deployed through a reviewed change set
 - 🧹 **Torn down after use** — the T1a stack was deleted the same day and checked gone, so the project costs nothing per month between windows
+- 🧊 **Next: Iceberg Silver with a real erasure** (tier T1b, built and tested locally, AWS window pending) — **Apache Iceberg v2** tables, a column added without rewriting data, and one visit **erased from Bronze, Silver and Gold**, with proof that time travel can no longer reach it
 
 ---
 
@@ -37,13 +38,14 @@ and which products make them leave after one click.
 [![AWS SAM](https://img.shields.io/badge/IaC-SAM_%2B_CloudFormation-FF4F8B?style=for-the-badge&logo=amazonwebservices&logoColor=white)](docs/adr/0004-iac-sam-cloudformation.md)
 [![Apache Spark](https://img.shields.io/badge/PySpark-4.1.1-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white)](https://spark.apache.org/)
 [![Parquet](https://img.shields.io/badge/Storage-Parquet-50ABF1?style=for-the-badge&logo=apacheparquet&logoColor=white)](https://parquet.apache.org/)
+[![Apache Iceberg](https://img.shields.io/badge/Apache_Iceberg-1.11.0_(T1b,_local)-4E8EE9?style=for-the-badge&logo=apache&logoColor=white)](docs/adr/0006-iceberg-silver.md)
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=for-the-badge&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
 [![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org/)
-[![pytest](https://img.shields.io/badge/pytest-139_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
+[![pytest](https://img.shields.io/badge/pytest-219_passing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](tests/README.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/deepan-mehta-analytics/aws-clickstream-analytics/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/deepan-mehta-analytics/aws-clickstream-analytics/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/Status-T0_·_T1a_Verified_on_AWS-brightgreen?style=for-the-badge)](PROJECT-STATUS.md)
+[![Status](https://img.shields.io/badge/Status-T0_·_T1a_Verified_on_AWS_·_T1b_Built-brightgreen?style=for-the-badge)](PROJECT-STATUS.md)
 [![Exam coverage](https://img.shields.io/badge/DEA--C01-26%2F120_shown-blue?style=for-the-badge)](docs/exam-guide-map.md)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -83,9 +85,16 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
   - five Athena validation queries
   - evidence is masked of account IDs, bucket names and emails before it is committed, and compared with the local run's expected counts ([`evidence/t1a/2026-10-19/`](evidence/t1a/2026-10-19/))
 
+### 🧊 Built and tested locally, AWS window not yet run (tier T1b: Iceberg Silver)
+
+- 🧊 **Silver as Apache Iceberg v2 tables** — `silver_clicks`, `silver_clicks_rejected` and a `silver_deleted_visits` suppression list, created by Athena from [`sql/ddl/`](sql/ddl/); the Glue job writes them through the Glue Data Catalog (Iceberg 1.11.0), with a guard that refuses format v3, which Athena cannot read ([ADR-0006](docs/adr/0006-iceberg-silver.md), proposed)
+- ➕ **Schema evolution** — a `weekend_click` column added between two runs by [`sql/migrations/001_add_weekend_click.sql`](sql/migrations/001_add_weekend_click.sql), without rewriting old files; the job refuses to write a frame that lacks a table column
+- 🗑️ **Erasure across all layers** — one visit deleted from Silver (Athena `DELETE`, then `OPTIMIZE` and `VACUUM` so time travel can no longer reach it), from the versioned Bronze file (a rewrite plus deletion of the old S3 version), and from Gold by a bookmark rerun; the suppression list stops it coming back
+- 🧰 **Owner window and teardown scripts** — 18 steps that stop at the first failure, 20 pass/fail checks, raw output kept outside the repo and only masked evidence committed; the local tests cover the erase, the checks and the masking, while the Athena behaviours are proven only by the run
+
 ### 🔜 Planned
 
-- 🧊 **T1b–T1d** — Iceberg Silver, ingest extras, evidence pass
+- 🧊 **T1b AWS window, then T1c–T1d** — the Iceberg run above (estimated ≤ ₹6), then ingest extras and an evidence pass
 - 🔔 **T2** — orchestration, data-quality alerts, monitoring
 - 🌊 **T3 + T4** — one streaming window (Kinesis → Firehose) and one Redshift Serverless window
 - 📈 **T5** — Streamlit dashboard, local on Athena and published on a snapshot
@@ -107,9 +116,10 @@ It uses the [UCI "Clickstream Data for Online Shopping" dataset](https://archive
 | 🐼 **Local processing** | ![pandas](https://img.shields.io/badge/pandas-2.3-150458?style=flat-square&logo=pandas&logoColor=white) ![NumPy](https://img.shields.io/badge/NumPy-013243?style=flat-square&logo=numpy&logoColor=white) | Local twin transformations and seeded enrichment |
 | ⚡ **Distributed processing** | ![PySpark](https://img.shields.io/badge/PySpark-4.1.1-E25A1C?style=flat-square&logo=apachespark&logoColor=white) ![Java](https://img.shields.io/badge/Java-17%2F21-ED8B00?style=flat-square&logo=openjdk&logoColor=white) | Spark Silver/Gold job for Glue (same PySpark as AWS Glue 6.0), checked row-for-row against pandas on the full file |
 | 🗄️ **Storage format** | ![Parquet](https://img.shields.io/badge/Apache_Parquet-pyarrow_16.1-50ABF1?style=flat-square&logo=apacheparquet&logoColor=white) | Columnar files, partitioned by month |
+| 🧊 **Table format** | ![Apache Iceberg](https://img.shields.io/badge/Apache_Iceberg-1.11.0_(v2)-4E8EE9?style=flat-square&logo=apache&logoColor=white) | Silver tables with deletes, schema evolution and time travel (T1b; tested locally, AWS run pending) |
 | 🦆 **Local SQL engine** | ![DuckDB](https://img.shields.io/badge/DuckDB-1.5-FFF000?style=flat-square&logo=duckdb&logoColor=black) | Runs the summary SQL (the same files are meant for Athena and Redshift) |
 | 🕒 **Timezones** | ![zoneinfo](https://img.shields.io/badge/zoneinfo-tzdata-6C757D?style=flat-square&logo=python&logoColor=white) | Shop local time (Europe/Warsaw), stored in UTC |
-| 🧪 **Testing** | ![pytest](https://img.shields.io/badge/pytest-9-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | 139 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, template guardrails and the teardown/evidence helpers |
+| 🧪 **Testing** | ![pytest](https://img.shields.io/badge/pytest-9-0A9EDC?style=flat-square&logo=pytest&logoColor=white) | 219 tests on Linux CI, including full-file reconciliation, pandas-vs-Spark parity, Iceberg writes, template guardrails and the window, erase and evidence helpers |
 | 🧹 **Linting** | ![ruff](https://img.shields.io/badge/ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black) ![cfn-lint](https://img.shields.io/badge/cfn--lint-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | Static checks for Python and CloudFormation |
 | ⚙️ **CI** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white) | Hygiene, lint and tests on every push; downloads the dataset and verifies its MD5 |
 | 🏗️ **Infrastructure as code** | ![AWS SAM](https://img.shields.io/badge/AWS_SAM-CloudFormation-FF4F8B?style=flat-square&logo=amazonwebservices&logoColor=white) | One stack per tier, owner-deployed through a reviewed change set ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)) |
@@ -160,6 +170,8 @@ flowchart LR
     CSV --> ENR
     CSV -->|download| LAM
     S3G --> CAT["Glue Catalog + Athena<br/>13 tables · 1 GB scan cutoff"]
+    GLUE -.-> ICE["🧊 T1b: Iceberg v2 Silver<br/>DELETE · OPTIMIZE · VACUUM<br/>built, AWS run pending"]
+    ICE -.-> CAT
     CAT -.-> DASH["📊 Streamlit dashboard"]
     S3B -.-> STREAM["Kinesis → Firehose window"]
     S3G -.-> RS["Redshift Serverless window"]
@@ -167,10 +179,10 @@ flowchart LR
     classDef done fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
     classDef planned fill:#f5f5f5,stroke:#999,stroke-dasharray:4 3,color:#666
     class ENR,B0,S0,G0,SUM,LAM,S3B,GLUE,S3G,CAT done
-    class DASH,STREAM,RS planned
+    class DASH,STREAM,RS,ICE planned
 ```
 
-*Green is verified on the full file (locally for T0, on AWS for T1a); dashed nodes are planned tiers.*
+*Green is verified on the full file (locally for T0, on AWS for T1a); dashed nodes are not yet run on AWS. The T1a run used 13 template-defined catalog tables; from T1b the template defines the 11 Bronze and Gold tables, and Athena creates the 3 Silver Iceberg tables.*
 
 | Component | Module | Role |
 |---|---|---|
@@ -183,8 +195,10 @@ flowchart LR
 | ▶️ **Runner** | `src/clickstream/local_run.py` | End-to-end local run writing Parquet and the report |
 | ⚡ **Spark stages** | `src/clickstream_spark/` | Source, enrichment, Bronze, Silver, Gold, summaries, quality and lake storage in PySpark |
 | λ **Ingest Lambda** | `lambdas/ingest_source/handler.py` | Downloads, verifies and lands the UCI file in S3 Bronze by month |
-| 🔖 **Glue job** | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks; Glue 6.0, G.1X × 2 workers, Flex, 15-minute timeout, monthly dynamic partition overwrite |
-| 🗂️ **Glue Catalog + projection** | `infra/t1-lake/template.yaml` | 13 tables defined in the template; Athena partition projection means no crawler and no repair step |
+| 🔖 **Glue job** | `glue/build_silver_gold.py` | New Bronze files → Silver and Gold, with job bookmarks; Glue 6.0, G.1X × 2 workers, Flex, 15-minute timeout, monthly dynamic partition overwrite (Silver into Iceberg tables from T1b) |
+| 🗂️ **Glue Catalog + projection** | `infra/t1-lake/template.yaml` | Bronze and Gold tables defined in the template (13 tables with Silver at the T1a run; 11 from T1b); Athena partition projection means no crawler and no repair step |
+| 🧊 **Iceberg Silver (T1b)** | `sql/ddl/`, `sql/migrations/`, `src/clickstream_spark/iceberg_tables.py` | Athena creates the three v2 tables; the Glue job writes them through the catalog, filters deleted visits, and refuses v3 or a missing column |
+| 🗑️ **Visit erase (T1b)** | `scripts/t1b_erase_visit_from_bronze.py` | Rewrites one Bronze month without the visit, then deletes the old S3 version so no copy remains |
 | 🔎 **Athena workgroup** | `infra/t1-lake/template.yaml` | Enforced settings, SSE-S3 results that expire after 1 day, 1 GB scan cutoff per query |
 
 | Tier | Scope | Status |
@@ -192,7 +206,7 @@ flowchart LR
 | 0 | Research, gaps register, ADRs, cost model | 🔄 ADR-0001 to 0005 accepted, ADR-0006 proposed; a few gaps open |
 | T0 | Local twin | ✅ Verified on the full file, 2026-09-25 |
 | T1a | Core lake: Lambda → S3 → Glue → Athena | ✅ Run on AWS 2026-10-19: 4 of 4 Athena checks matched the local twin, bookmark proven; torn down the same day |
-| T1b–T1d | Iceberg Silver, ingest extras, evidence pass | 🔄 T1b designed ([ADR-0006](docs/adr/0006-iceberg-silver.md), proposed); not yet run |
+| T1b–T1d | Iceberg Silver, ingest extras, evidence pass | 🔄 T1b built and tested locally (219 tests on CI), owner window and runbook ready ([ADR-0006](docs/adr/0006-iceberg-silver.md), proposed); not yet run on AWS |
 | T2 | Orchestration, data-quality alerts, monitoring | ⏳ |
 | T3 + T4 | Streaming window + Redshift Serverless window | ⏳ |
 | T5 | Streamlit dashboard | ⏳ |
@@ -224,7 +238,9 @@ aws-clickstream-analytics/
 │   ├── source.py / enrichment.py    ← reader and enrichment, equal to pandas
 │   ├── bronze.py / silver.py / gold.py  ← medallion layers in Spark
 │   ├── summaries.py / quality.py    ← summary SQL and quality counts
-│   ├── storage.py                   ← rerun-safe monthly lake writes
+│   ├── storage.py                   ← rerun-safe monthly lake writes (Iceberg Silver from T1b)
+│   ├── iceberg_tables.py            ← Iceberg table names, v2 guard, deleted-visits filter (T1b)
+│   ├── sql_files.py                 ← loads the summary SQL, plus the Iceberg DDL and migrations whose columns tests check (T1b)
 │   └── pipeline.py                  ← assembles the whole run
 │
 ├── lambdas/ingest_source/handler.py ← ingest Lambda: download, MD5 check, land by month
@@ -232,13 +248,19 @@ aws-clickstream-analytics/
 ├── scripts/build_glue_libs.py       ← builds the library zip the Glue job imports
 ├── scripts/t1a-*.ps1                ← owner-run T1a window, Glue code upload and verified teardown (never run by CI or agents)
 ├── scripts/t1a_evidence.py          ← expected counts, evidence masking and comparison for the T1a window
+├── scripts/t1b-*.ps1                ← owner-run T1b window (18 steps) and teardown that drops the Iceberg tables first
+├── scripts/t1b_evidence.py          ← visit A pick, expected counts without it, 20 pass/fail checks, field-scoped masking
+├── scripts/t1b_erase_visit_from_bronze.py  ← removes one visit from a Bronze month and its old S3 version
+├── sql/ddl/                         ← 3 Athena DDL files: the Iceberg v2 Silver tables (T1b)
+├── sql/migrations/                  ← 001 adds weekend_click (schema evolution, T1b)
 ├── sql/validation/t1a/              ← 5 Athena queries that check the deployed lake against expected counts
-├── evidence/                        ← masked evidence per owner window; t1a/2026-10-19/ holds the run log, Athena results and comparison
+├── sql/validation/t1b/              ← 9 Athena queries: counts, snapshots, data files, time travel, format version
+├── evidence/                        ← masked evidence per owner window; t1a/2026-10-19/ holds the run log, Athena results and comparison (t1b/ after its window)
 ├── sql/summaries/                   ← 4 dashboard queries, portable to Athena/Redshift
 ├── infra/foundation/template.yaml   ← artifacts-bucket stack (owner-deployed only)
-├── infra/t1-lake/template.yaml      ← T1a stack: 4 buckets, Lambda, Glue job + catalog, Athena workgroup
+├── infra/t1-lake/template.yaml      ← T1 stack: 4 buckets, Lambda, Glue job (Iceberg enabled) + Bronze/Gold catalog, Athena workgroup
 │
-├── tests/                           ← 139 pytest tests (see tests/README.md)
+├── tests/                           ← 219 pytest tests (see tests/README.md)
 ├── data/README.md                   ← dataset source, licence, MD5s, measured stats (data itself is gitignored)
 ├── docs/
 │   ├── adr/                         ← ADRs 0001–0005 (accepted), 0006 (proposed) + cost-tier annex
@@ -251,7 +273,7 @@ aws-clickstream-analytics/
 │
 ├── dashboards/                      ← dashboard tier (T5), README only for now
 ├── .github/workflows/ci.yml         ← hygiene, lint (ruff + cfn-lint), tests
-├── Makefile                         ← working local targets; cloud and T1a owner targets say "owner-run only"
+├── Makefile                         ← working local targets; cloud, T1a and T1b owner targets say "owner-run only"
 ├── pyproject.toml                   ← package and pinned dependencies
 ├── .env.example                     ← placeholder configuration
 ├── PROJECT-STATUS.md                ← phase-by-phase status
@@ -291,8 +313,9 @@ and `quality_report.json`.
 .venv/Scripts/python -m pip install -e ".[dev,spark]"    # adds PySpark 4.1.1 and boto3
 .venv/Scripts/python -m pytest tests/test_spark_*.py -v   # needs Java 17 or 21 via SPARK_JAVA_HOME
 ```
-Without Java the Spark tests are skipped with a clear reason. The 4
-lake-storage tests are skipped on Windows and run on Linux CI.
+Without Java the Spark tests are skipped with a clear reason. Spark file
+writes need `winutils` on Windows, so 13 tests (8 Iceberg, 4 lake-storage,
+1 session write) are skipped there and run on Linux CI.
 
 ### ⚙️ Option 3: CI (GitHub Actions)
 
@@ -304,7 +327,9 @@ full-file and pandas-vs-Spark tests run for real there.
 ### ☁️ Option 4: Tier T1a on AWS (owner only, run on 2026-10-19)
 
 Only the account owner runs these steps; no agent or CI job holds AWS
-credentials. All eight steps ran on 2026-10-19 (an earlier attempt on
+credentials. These steps record how T1a ran; the template in `main` has
+since moved on to T1b (Silver is now Iceberg), so a fresh run follows
+Option 5. All eight steps ran on 2026-10-19 (an earlier attempt on
 2026-10-05 stopped on two account-level limits, since lifted by AWS: GAPS
 G-18, G-19). Run them in PowerShell 7 from the repo root, not in Git Bash:
 `sam` is `sam.cmd` on Windows, and the scripts use paths relative to the repo
@@ -337,19 +362,43 @@ root. Every value in angle brackets is a placeholder. Full detail is in
 8. Sign out: `aws logout`, and record the window in the teardown log in
    [`docs/cost-model.md`](docs/cost-model.md).
 
+### 🧊 Option 5: Tier T1b on AWS (owner only, not yet run)
+
+Same rules as Option 4: owner only, PowerShell 7.3 or later, from the repo
+root, placeholders in angle brackets. Full runbook and pre-flight in
+[`infra/README.md`](infra/README.md#tier-t1b-window-runbook-owner-only).
+
+1. Pre-flight as in Option 4, plus: no `evidence/t1b/<today>/` folder exists
+   (the window refuses to overwrite one), and the local dataset is present
+   (the window computes the expected counts from it).
+2. Sign in (`aws login --region ap-south-1`), upload the Glue code
+   (`pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>`),
+   then `sam build` and create a change set as in Option 4. The Glue role's
+   Catalog access changes, so review the IAM resources first, then execute
+   the change set from the console.
+3. Run the window: `pwsh scripts/t1b-window.ps1`. It creates the three Iceberg
+   tables, runs Glue three times, adds the column, erases visit A from every
+   layer and saves masked evidence to `evidence/t1b/<date>/`. It stops at the
+   first failure, naming the step.
+4. Tear down: `pwsh scripts/t1b-teardown.ps1` drops the three Iceberg tables
+   (the stack does not own them), checks that only stack-owned tables remain,
+   then runs the T1a teardown.
+5. Sign out (`aws logout`) and log the window in
+   [`docs/cost-model.md`](docs/cost-model.md).
+
 ---
 
 ## 🧪 Tests
 
 ```bash
 .venv/Scripts/python -m ruff check src tests lambdas scripts glue
-.venv/Scripts/python -m pytest -v        # → 139 passed on Linux CI (135 run, 4 skipped on Windows)
+.venv/Scripts/python -m pytest -v        # → 219 passed on Linux CI (206 run, 13 skipped on Windows)
 .venv/Scripts/cfn-lint
 ```
 
 The Spark tests need a JDK (Java 17 or 21); point `SPARK_JAVA_HOME` at it, or
-they are skipped with a reason. The 4 lake-storage tests are skipped on
-Windows and run on Linux CI.
+they are skipped with a reason. The 13 tests that write Spark files (8
+Iceberg, 4 lake-storage, 1 session) are skipped on Windows and run on Linux CI.
 
 | File | What it covers |
 |---|---|
@@ -361,13 +410,18 @@ Windows and run on Linux CI.
 | `test_summaries.py`, `test_local_run.py` | The SQL summaries and the end-to-end local run |
 | `test_full_file.py` | The real file against the measured stats (skipped when the dataset is not downloaded) |
 | `test_infra_templates.py` | Every CloudFormation template: encryption, private buckets, TLS-only policies, safe IAM, no account IDs in any committed file |
-| `test_t1_lake_template.py` | T1a stack: parameters, outputs, Glue arguments (including no argument name that AWS Glue reserves for itself), logging, table columns vs the code, partition projection |
+| `test_t1_lake_template.py` | T1 stack: parameters, outputs, Glue arguments (including no argument name that AWS Glue reserves for itself, and the Iceberg settings), the Glue role's scoped Catalog access, logging, table columns vs the code, partition projection |
 | `test_ingest_source.py` | Ingest Lambda: month split, MD5 check, retries within the Lambda timeout, skip already-landed months |
 | `test_spark_session.py` | Local Spark session uses the same settings as the AWS Glue 6.0 job |
 | `test_spark_source.py`, `test_spark_silver.py`, `test_spark_gold.py`, `test_spark_pipeline.py` | Each Spark stage matches its pandas twin |
 | `test_spark_full_file.py` | Spark and pandas give identical Silver `clicks` and Gold `visits` on all 165,474 clicks |
 | `test_spark_storage.py` | Monthly lake writes, reruns without duplicates, runs with no new files, all-rejected months (skipped on Windows) |
 | `test_t1a_evidence.py` | Evidence masking (account IDs, bucket names, emails), expected counts, and the match/mismatch comparison and its exit codes |
+| `test_iceberg_sql.py` | The Iceberg DDL and migration: columns and types match the code, exact table properties, no format v3 anywhere |
+| `test_spark_iceberg.py` | Iceberg writes (skipped on Windows): the v2 guard, timestamps round-trip, a missing column is refused, a deleted visit leaves other visits identical, an empty deleted list changes nothing |
+| `test_t1b_evidence.py` | Visit A pick, expected counts without it, all 20 T1b checks, field-scoped masking of the visit ID, version IDs and buckets |
+| `test_t1b_erase_visit.py` | Bronze erase: line endings, BOM, a visit ID appearing in another column, refusal on zero matches or truncation, old-version deletion |
+| `test_t1b_scripts.py` | The T1b window and teardown scripts: step order, privacy rules, owner-only Makefile targets, and their PowerShell helpers on fixtures |
 | `test_glue_packaging.py` | Library zip contents and the Glue entry point's bookmark handling |
 | `test_package.py` | Package metadata |
 
@@ -416,7 +470,7 @@ tables ([`athena/05_visit_depth_funnel.json`](evidence/t1a/2026-10-19/athena/05_
 | Run | What it did | Duration |
 |---|---|---|
 | `test_spark_full_file.py` on a laptop | full pandas and Spark runs on 165,474 clicks, then compare | 50.6 s |
-| Full test suite on GitHub Actions | 108–139 tests incl. dataset-backed and Spark tests | 67.8 s – 132.0 s |
+| Full test suite on GitHub Actions | 108–219 tests incl. dataset-backed, Spark and Iceberg tests | 67.8 s – 204.8 s (219 tests, run 39530012861) |
 | Glue 6.0 Flex run 1 on AWS (2 G.1X workers) | April–July: 151,326 clicks → Silver and Gold | 145 s |
 | Glue 6.0 Flex run 2 on AWS (2 G.1X workers) | August only, via the bookmark: 14,148 clicks | 149 s |
 
@@ -451,8 +505,10 @@ other credits, so the rest is out of pocket at list price. Details in
 This repo doubles as verifiable skills coverage for the **AWS Certified Data
 Engineer – Associate (DEA-C01)** exam guide v1.1: **26 of 120 skills are
 shown** (by the local run, the tests and the T1a run on AWS), **8 are
-designed** in ADRs, and **86 are not started**. The plan covers **103 skills, plus 8 stretch**; the 9 left
-out are recorded as accepted limitations. See the full breakdown in
+designed** in ADRs, and **86 are not started**. The plan covers **104 skills, plus 8 stretch**; the 8 left
+out are recorded as accepted limitations. The T1b Iceberg skills (open table
+formats, deleting data on request, schema evolution) flip only after the
+AWS run shows them. See the full breakdown in
 [`docs/exam-guide-map.md`](docs/exam-guide-map.md). This is a skills coverage
 map, not exam prep, and it is honest by construction: nothing is marked shown
 without a real run behind it.
@@ -465,16 +521,18 @@ without a real run behind it.
 - **No checkout or purchase events**: the funnel is a **browse-depth** funnel, not a purchase funnel
 - **Time of day and device are synthetic**: generated from a fixed seed, and labelled `_synthetic` everywhere
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%)
-- **Only tier T1a has run on AWS**: the streaming, Redshift and dashboard tiers are designed and priced, not built. Between windows only the small artifacts bucket exists
+- **Only tier T1a has run on AWS**: T1b is ready but not yet run; the streaming, Redshift and dashboard tiers are designed and priced, not built. Between windows only the small artifacts bucket exists
 - **Infrastructure is deployed per window, not left running**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The T1a stack ran for one window on 2026-10-19 and was deleted the same day
 - **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
 - **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
-- **The cost is read per month, not per window**: Cost Explorer's monthly view covers the whole account, so the T1a figure (≈ ₹3.33) is attributed by service; the window's own Glue evidence over-reported DPU-seconds (291/299) against what was billed (matching 237/226) ([`docs/cost-model.md`](docs/cost-model.md))
+- **The cost is read per month, not per window**: Cost Explorer's monthly view covers the whole account, so the T1a figure (≈ ₹3.33) is attributed by service; the window's own Glue evidence over-reported DPU-seconds (291/299) against what was billed (matching 237/226). The T1b window will be read from Cost Explorer's daily view (days in UTC) instead ([`docs/cost-model.md`](docs/cost-model.md))
 - **The first Glue run on AWS failed on a script bug** that local tests could not reach (the `awsglue` library exists only inside Glue): the script asked for an argument Glue reserves for itself. It is fixed and now guarded by a test; the Glue minimum worker count is still unverified ([`docs/GAPS.md`](docs/GAPS.md) G-15)
 - **Encryption in transit is configured but not tested**: the TLS-only bucket policies were deployed, but no plain-HTTP request was tried against them
 - **Single runs only**: runtimes above are one run each, not averages
-- **9 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), schema conversion, two multi-account skills that need AWS Organizations, and CloudTrail Lake (closed to new customers on 2026-05-31) ([`docs/GAPS.md`](docs/GAPS.md) §3)
+- **T1b (Iceberg Silver) is built and tested locally but has not run on AWS**: six assumptions can only be settled by the owner's window ([`docs/GAPS.md`](docs/GAPS.md) G-20 to G-25), among them whether the bookmark re-reads a rewritten Bronze file, whether Athena-created tables record their metadata file location in the Glue Data Catalog, the wording of Athena's error for an expired snapshot, whether `VACUUM` keeps the rejects table's last snapshot, and the timestamp cast in the deleted-visits `INSERT`. Each one stops the window with a named step rather than passing silently. Athena's `SHOW TBLPROPERTIES` does not list `format-version`, so the window reads it from the table's metadata file instead
+- **The T1b weekend check re-derives the rule**: August's `weekend_click` values are checked against "Saturday or Sunday" computed from each `click_date` in Athena, not joined row by row with the local twin's output
+- **8 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), two multi-account skills that need AWS Organizations, and CloudTrail Lake (closed to new customers on 2026-05-31) ([`docs/GAPS.md`](docs/GAPS.md) §3)
 
 ---
 
@@ -482,7 +540,9 @@ without a real run behind it.
 
 - [x] T0: local twin (Bronze → Silver → Gold → summaries, verified on the full file)
 - [x] T1a: core lake on AWS Mumbai (Lambda → S3 → Glue → Athena), run and torn down on 2026-10-19; measured cost ≈ ₹3.33
-- [ ] T1b–T1d: Iceberg Silver, ingest extras, evidence pass
+- [ ] T1b: Iceberg Silver (built and tested locally; owner AWS window pending, estimated ≤ ₹6)
+- [ ] T1c–T1d: ingest extras, evidence pass
+- [ ] Schema conversion (exam 2.4.3): a local Docker MySQL source and the AWS Schema Conversion Tool's virtual target, ₹0, near T4
 - [ ] T2: orchestration, data-quality alerts, monitoring
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window
 - [ ] T5: Streamlit dashboard, local on Athena and published on a snapshot

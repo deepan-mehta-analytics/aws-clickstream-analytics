@@ -8,7 +8,7 @@ credentials; CI only lints and tests the templates.
 | Folder | Stack name | What it creates | Status |
 |---|---|---|---|
 | `foundation/` | `clickstream-foundation` | One S3 bucket for packaged code (SSE-S3, private, TLS only, 30-day expiry) | Deployed 2026-10-05 (owner); kept between windows |
-| `t1-lake/` | `clickstream-t1-lake` | Tier T1a/T1b (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job with Iceberg enabled and scoped Glue Data Catalog access, Gold catalog tables, Athena workgroup; the three Silver Iceberg tables are created by Athena from `sql/ddl/`, not by this template) | Two creation attempts on 2026-10-05 rolled back on account-level limits (GAPS G-18, G-19) and were deleted; waiting on AWS Support to enable Glue |
+| `t1-lake/` | `clickstream-t1-lake` | Tier T1a/T1b (ingest Lambda, Bronze/Silver/Gold/Athena-results buckets, Glue job with Iceberg enabled and scoped Glue Data Catalog access, Gold catalog tables, Athena workgroup; the three Silver Iceberg tables are created by Athena from `sql/ddl/`, not by this template) | T1a ran on 2026-10-19 and was deleted the same day, verified gone (two earlier attempts on 2026-10-05 rolled back on account-level limits, GAPS G-18, G-19). The template has since moved to T1b (Iceberg Silver); not yet deployed |
 
 ## Checks (no AWS credentials)
 
@@ -78,6 +78,11 @@ Record every window (created, torn down, measured cost) in the teardown log
 in [`docs/cost-model.md`](../docs/cost-model.md).
 
 ## Tier T1a window runbook (owner only)
+
+This records how T1a ran on 2026-10-19. The template now carries T1b's
+changes (Silver as Athena-created Iceberg tables), so a new window follows
+the T1b runbook below; `t1a-teardown.ps1` is still the last step of the T1b
+teardown.
 
 Run the commands in this order from the repository root, in PowerShell 7.3 or
 later. Values in angle brackets are placeholders; the real values come from
@@ -151,3 +156,82 @@ If Glue 6.0 is not available in `ap-south-1`, redeploy with the template's
 `GlueVersion` parameter set to `5.1` (see
 [ADR-0005](../docs/adr/0005-t1-batch-lake-design.md)). Masked evidence lands in
 `evidence/t1a/<date>/`; check it for account IDs before committing.
+
+## Tier T1b window runbook (owner only)
+
+Not yet run. T1b turns Silver into Apache Iceberg v2 tables, adds a column
+between runs and erases one visit ("visit A") from Bronze, Silver and Gold
+([ADR-0006](../docs/adr/0006-iceberg-silver.md), proposed). Estimated cost
+**≤ ₹6** ([`docs/cost-model.md`](../docs/cost-model.md) §3 B3). Same rules as
+T1a: PowerShell 7.3 or later in your own window, from the repository root,
+placeholders in angle brackets.
+
+**Pre-flight: everything in the T1a list above, plus:**
+
+- [ ] No `evidence/t1b/<today>/` folder exists. The window refuses to start
+      rather than overwrite one; move an old one aside, never delete it.
+- [ ] `data/e-shop clothing 2008.csv` is present and `.venv` exists: the window
+      picks visit A and computes the expected counts locally.
+- [ ] The stack from any earlier window is gone. The window is not rerunnable
+      on the same stack: `CREATE TABLE` fails if the Iceberg tables exist, so
+      a retry means teardown and a fresh deploy.
+- [ ] You know the date in UTC: Cost Explorer's daily view counts days in UTC,
+      so a window started before 05:30 IST is billed on the previous UTC day.
+
+```powershell
+# 1. Sign in for this window only
+aws login --region ap-south-1
+
+# 2. Upload the Glue script and library zip (the foundation stack is still there)
+pwsh scripts/t1a-upload-glue-code.ps1 -ArtifactsBucket <ArtifactsBucketName>
+
+# 3. Build, then create a change set only
+cd infra
+sam build --template-file t1-lake/template.yaml --build-dir .aws-sam/t1-lake
+sam deploy --config-file (Resolve-Path samconfig.toml).Path --config-env t1-lake --template-file .aws-sam/t1-lake/template.yaml --no-execute-changeset
+cd ..
+
+# 4. Review the change set (IAM first: the Glue role now reads and updates its
+#    Iceberg tables in the Glue Data Catalog), then execute it from the console.
+
+# 5. Run the window: steps 1-18 of the design, stopping at the first failure with the step number
+pwsh scripts/t1b-window.ps1
+
+# 6. Tear down: drops the 3 Iceberg tables, checks only stack-owned tables remain, then runs t1a-teardown.ps1
+pwsh scripts/t1b-teardown.ps1
+
+# 7. Remove the cached session, then log the window in docs/cost-model.md
+aws logout
+```
+
+What the window does, in order: creates the three Iceberg tables from
+`sql/ddl/` and confirms format version 2; lands April–July and runs Glue;
+records the data files, then adds `weekend_click`; lands August and runs Glue
+again (the bookmark reads one file); checks the new column; picks visit A,
+deletes it from both Silver tables with Athena and lists it in
+`silver_deleted_visits`; time-travels to the old snapshot (still there);
+runs `OPTIMIZE` and `VACUUM`; confirms the old files are gone from S3 and
+time travel now fails; erases visit A from its Bronze month (rewrite, then
+delete the old S3 version); runs Glue a third time to rebuild that month's
+Gold; and checks every final count against the local twin minus visit A.
+
+If a step stops the window:
+
+- **Run 3 read 0 files** (the bookmark did not pick up the rewritten Bronze
+  file): the window stops and prints the documented fallback. Resetting the
+  bookmark is your call, never automatic. A plain reset makes the next run
+  read all five months; that is still safe (monthly overwrite plus the
+  deleted-visits filter) but the run-3 check expecting 1 file will then fail
+  and needs a note in the evidence.
+- **Step 1 cannot read the format version**: Athena's `SHOW TBLPROPERTIES`
+  does not list it, so the window reads the table's metadata file through the
+  Glue Data Catalog. If the catalog has no `metadata_location`, it stops at
+  step 1, before any Glue spend.
+- **Step 14 fails for a reason other than an expired snapshot** (an expired
+  login, throttling, permissions): it stops rather than counting that as
+  proof.
+
+Raw output (Athena results, the private visit A file, S3 version listings)
+stays in `%TEMP%/t1b-window-<date>/`. Only masked copies reach
+`evidence/t1b/<date>/` ([`evidence/README.md`](../evidence/README.md)); read
+them before committing.

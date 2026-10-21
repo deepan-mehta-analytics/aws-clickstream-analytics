@@ -1,7 +1,8 @@
 # evidence/
 
-Masked evidence from real T1a proof windows, written by
-`scripts/t1a-window.ps1` and never edited by hand.
+Masked evidence from real proof windows, written by
+`scripts/t1a-window.ps1` (T1a) and `scripts/t1b-window.ps1` (T1b) and never
+edited by hand. No T1b window has run yet.
 
 ## `evidence/t1a/<date>/`
 
@@ -13,6 +14,31 @@ One folder per window, named by the date it ran (`yyyy-MM-dd`):
 | `expected.json` | The local-twin counts (`scripts/t1a_evidence.py expected`) that the Athena results are checked against. |
 | `comparison.json` | The result of `scripts/t1a_evidence.py compare`: expected vs. Athena counts per query, with a `match` flag for each. |
 | `athena/*.json` | One masked Athena `get-query-results` response per file in `sql/validation/t1a/`. |
+
+## `evidence/t1b/<date>/`
+
+One folder per T1b window. The window refuses to start if today's folder
+already exists, so an earlier run's evidence is never overwritten.
+
+| File | Contents |
+|---|---|
+| `window.json` | The whole run step by step: ingest responses, the three Glue run summaries and quality reports, Athena query summaries, and a `failure` message naming the step if it stopped early. |
+| `expected_before.json`, `expected_after.json` | The local-twin counts with and without visit A (`scripts/t1b_evidence.py expected`). |
+| `comparison.json` | The 20 pass/fail checks from `scripts/t1b_evidence.py checks` (format version, bookmark file counts, the column change, the delete, time travel, data files after `OPTIMIZE` and `VACUUM`, the Bronze erase, run 3 and the final counts). Written only once step 8 has run. |
+| `athena/*.json` | One masked Athena `get-query-results` response per query. |
+| `facts/*.json` | The small inputs the checks read (counts, file lists, snapshot results, the Bronze version count), one file per fact. |
+
+Two checks are narrower than they could be: August's `weekend_click` values
+are compared with "Saturday or Sunday" worked out from each `click_date` in
+Athena (the local twin's rule), not joined row by row with the local output;
+and the rejects table may keep its last snapshot after `VACUUM`, because
+visit A has no rejected rows and so no new commit lands there.
+
+T1b masking adds two things to the T1a rules below: the real visit ID
+becomes the label `visit A` (only in fields that carry a visit, never by a
+free-text number swap), and S3 version IDs become a placeholder. The real
+visit ID, the version IDs and the raw listings stay in
+`%TEMP%/t1b-window-<date>/`.
 
 ## Masking
 

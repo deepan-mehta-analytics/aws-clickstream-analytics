@@ -161,6 +161,32 @@ evidence (60 + 291 + 299 = 650, which would have cost $0.0367).
 | Athena data scanned | 6.5 MB for the Bronze CSV count; 0 bytes for the Silver and Gold counts (Parquet row counts come from file metadata); 113 bytes for the funnel query |
 | Lambda | The earlier, failed try wrote April–July to Bronze; the successful window's 2 invocations skipped those 4 months and wrote August |
 
+### B3. Tier T1b window, Mumbai (estimate)
+
+Built from T1a's billed figures, not from a new run:
+
+| Line item | Calculation | Estimate |
+|---|---|---|
+| Glue 6.0 Flex, 3 runs (April–July, August, the rewritten month) | About 240 DPU-seconds a run, as billed for T1a's two runs (237 and 226) → about 720 DPU-seconds × $0.203 per DPU-hour (Price List, published 2026-10-12) ≈ $0.041 | ≈ ₹3.9 |
+| Athena (DDL, `DELETE`, `OPTIMIZE`, `VACUUM`, about 40 small queries) | A few MB scanned in all; T1a's five queries cost $0.0001 | under ₹0.1 |
+| S3 (Iceberg metadata files, the Bronze rewrite, listings) | Requests and a few MB for one day | under ₹0.1 |
+| **Total, plus 18% GST** | ₹94.93/USD (ECB via Frankfurter, 2026-10-19) | **≈ ₹4.6, ceiling ₹6** (owner ruling 2026-10-20) |
+
+Iceberg commits add catalog calls and small metadata files, so a run may take
+a little longer than T1a's; the ₹6 ceiling leaves room for that and for one
+failed run. The Glue 15-minute timeout, Flex and the Athena 1 GB scan cutoff
+stay in place.
+
+**Reading the T1b cost.** T1a's cost could only be read from the monthly
+view, which mixes both October windows. For T1b, set Cost Explorer to
+**Daily** granularity with a custom range covering the window's date, grouped
+by service. Cost Explorer counts days from 00:00 to 23:59 **UTC**, so a window
+started before 05:30 IST falls on the previous UTC day: check both days.
+Source: [Cost Explorer, choosing time ranges](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-modify.html)
+("You can choose to view your cost data in monthly or daily levels of
+granularity"; "Days are defined as 12:00:00 AM to 11:59:59 PM … All times are
+in Universal Coordinated Time (UTC)"), read 2026-10-21.
+
 ### C. BI layer (either path)
 
 | Option | Estimate |

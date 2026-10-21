@@ -11,8 +11,8 @@ wording below is **paraphrased**; the official guide is the authority.
 **Coverage: 26 of 120 skills shown (local run, tier T0, plus the first AWS run, tier T1a) · 8 designed · 86 not started**
 (as of 2026-10-19; the T1a core lake ran on AWS on 2026-10-19 (Lambda → S3 Bronze → Glue 6.0 Spark → Glue Data Catalog → Athena) and was torn down the same day; masked evidence is in [`evidence/t1a/2026-10-19/`](../evidence/t1a/2026-10-19/)).
 
-**Plan: 103 planned · 8 stretch · 9 not planned.** Planned skills by
-domain: D1 37/37, D2 20/26, D3 27/28, D4 19/29. On 2026-09-26, 26 stretch
+**Plan: 104 planned · 8 stretch · 8 not planned.** Planned skills by
+domain: D1 37/37, D2 21/26, D3 27/28, D4 19/29. On 2026-09-26, 26 stretch
 skills were promoted to planned as low-cost add-ons to tiers T1–T4 (each row
 names its tier); the costs of Glue Data Quality, Lake Formation, CloudTrail,
 Logs Insights and Parameter Store are to be verified before T2 is built. On
@@ -21,10 +21,13 @@ were promoted after pricing each one in Mumbai from the AWS Price List API
 (about ₹170 in total, estimates, not measured); each row names its tier and
 estimate, and each one adds a line to that tier's teardown. One of them,
 4.4.3 (CloudTrail Lake), went back to not planned the same day: CloudTrail
-Lake closed to new customers on 2026-05-31. The 9 left are accepted
-limitations (see `GAPS.md` §3): unpriced SageMaker services, a Transfer
-Family leak risk, a schema-conversion source database, two skills that need
-AWS Organizations, and CloudTrail Lake. Twelve skills (11 planned, 1 stretch)
+Lake closed to new customers on 2026-05-31. On 2026-10-21, 2.4.3 (schema
+conversion) moved to planned (owner ruling 2026-10-20: a local Docker MySQL
+source and the AWS Schema Conversion Tool's virtual target, ₹0). The 8 left
+are accepted limitations (see `GAPS.md` §3): unpriced SageMaker services, a
+Transfer Family leak risk, two skills that need AWS Organizations, and
+CloudTrail Lake. The T1b rows (2.1.7, 2.3.4, 2.3.5, 2.4.2) are built and
+tested locally; they flip to ✅ only after the T1b window on AWS shows them. Twelve skills (11 planned, 1 stretch)
 depend on the streaming and Redshift windows in ADR-0001, and would be lost with a
 batch-only design.
 
@@ -115,7 +118,7 @@ Accepted 2026-09-25):
 | 2.1.4 | Migration tools such as Transfer Family | Not planned | Accepted limitation: a Transfer Family endpoint costs ≈ ₹34/hour while it exists (≈ ₹25,000/month if left running) | ⬜ |
 | 2.1.5 | Federated queries, materialized views, Spectrum | Planned | Redshift Spectrum over S3 or a materialized view | ⬜ |
 | 2.1.6 | Manage locks | Planned | T2: DynamoDB conditional-write lock so only one batch run executes at a time. Est. ₹0 | ⬜ |
-| 2.1.7 | Open table formats (Iceberg) | Planned | T1: Silver as an Apache Iceberg table queried by Athena | ⬜ |
+| 2.1.7 | Open table formats (Iceberg) | Planned | T1b: Silver as Apache Iceberg v2 tables created by Athena and written by Glue ([ADR-0006](adr/0006-iceberg-silver.md), proposed; built and tested locally, AWS window pending) | ⬜ |
 | 2.1.8 | Vector index types | Planned | T1d: same S3 Vectors demo (partial: S3 Vectors does not expose HNSW/IVF index types; concept note covers them) | ⬜ |
 
 ### Task 2.2: Data cataloging
@@ -137,7 +140,7 @@ Accepted 2026-09-25):
 | 2.3.2 | Move data between tiers with Lifecycle rules | Planned | S3 Lifecycle on Bronze | ⬜ |
 | 2.3.3 | Expire aged data with Lifecycle rules | Planned | S3 Lifecycle expiry | ⬜ |
 | 2.3.4 | Versioning and TTL | Planned | T1: S3 versioning on Bronze with a lifecycle rule expiring old versions | ⬜ |
-| 2.3.5 | Delete data for legal or business reasons | Planned | T1: delete one visit's rows from the Iceberg Silver table, with before/after counts | ⬜ |
+| 2.3.5 | Delete data for legal or business reasons | Planned | T1b: erase one visit from Silver (Athena `DELETE`, `OPTIMIZE`, `VACUUM`), Bronze (rewrite plus old-version delete) and Gold (bookmark rerun), with a suppression list (built and tested locally, AWS window pending) | ⬜ |
 | 2.3.6 | Resiliency and availability | Stretch | — | ⬜ |
 
 ### Task 2.4: Data models and schema evolution
@@ -145,8 +148,8 @@ Accepted 2026-09-25):
 | Skill | Paraphrase | Plan | Intended evidence | Status |
 |---|---|---|---|---|
 | 2.4.1 | Design Redshift / DynamoDB / Lake Formation schemas | Planned | Two-grain star schema (clicks, visits), [ADR-0003](adr/0003-data-model.md) | 🟡 |
-| 2.4.2 | Handle changing data characteristics | Planned | T1: add a column to the Iceberg Silver table (schema evolution) without rewriting data | ⬜ |
-| 2.4.3 | Schema conversion tools | Not planned | Accepted limitation: needs a paid source database; no migration in this project | ⬜ |
+| 2.4.2 | Handle changing data characteristics | Planned | T1b: `weekend_click` added between two runs by `sql/migrations/001_add_weekend_click.sql`, old files unchanged (built and tested locally, AWS window pending) | ⬜ |
+| 2.4.3 | Schema conversion tools | Planned | Own small slice near T4: convert a local Docker MySQL schema with the AWS Schema Conversion Tool against a virtual target (no paid database). Est. ₹0 | ⬜ |
 | 2.4.4 | Data lineage tooling | Not planned | Accepted limitation: lineage tooling (SageMaker Catalog) is unpriced for Mumbai (2026-10-05) | ⬜ |
 | 2.4.5 | Partitioning, compression and indexing practice | Planned | Parquet partitioned by month (`click_month`, `visit_month`) in `local_run.py` (local run, tier T0); Redshift sort and distribution keys still designed only, [ADR-0003](adr/0003-data-model.md) | ✅ |
 | 2.4.6 | Vectorization concepts | Planned | T1d: same S3 Vectors demo (embeddings generated with Bedrock) | ⬜ |
