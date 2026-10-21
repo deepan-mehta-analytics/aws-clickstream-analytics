@@ -45,7 +45,7 @@ function Invoke-AthenaStatement([string]$Text) {                        # run on
 if (Test-StackGone) {                                                   # a previous run already deleted the stack (and its workgroup)
     Write-Host "Stack $StackName is already gone; skipping the Iceberg table drops."  # the T1a teardown below still runs its checks
 }
-else {
+else {                                                                  # the stack still exists
     $out = Get-StackOutputs                                             # workgroup and database names, read once
 
     # ── Section 2: drop the three Iceberg tables through the workgroup ─

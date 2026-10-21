@@ -14,13 +14,15 @@ param(                                                                   # optio
 $ErrorActionPreference = "Stop"                                         # stop on the first error
 $PSNativeCommandUseErrorActionPreference = $true                        # a failing aws/python call stops the script too
 $day = Get-Date -Format yyyy-MM-dd                                      # today's date, names both folders
-$work = Join-Path $env:TEMP "t1b-window-$day"                           # raw output (visit ID, version IDs, bucket names) never enters the repo
-if (Test-Path $work) { Remove-Item -Recurse -Force $work }              # a same-day rerun must never see the earlier run's files
 $evidence = "evidence/t1b/$day"                                         # masked evidence only, safe to commit
+if (Test-Path $evidence) {                                              # an earlier run today already saved evidence
+    throw "$evidence already exists from an earlier run today. Move it aside first (rename it or move it out of the repo; never delete it), then rerun."  # never overwrite or delete earlier evidence
+}
+$work = Join-Path $env:TEMP "t1b-window-$day"                           # raw output (visit ID, version IDs, bucket names) never enters the repo
+if (Test-Path $work) { Remove-Item -Recurse -Force $work }              # a same-day rerun must never see the earlier run's raw files
 foreach ($folder in @("athena", "sql", "reports", "facts", "s3")) {     # raw Athena results, filled-in SQL, Glue reports, check inputs, S3 listings
     New-Item -ItemType Directory -Force -Path "$work/$folder" | Out-Null  # one scratch subfolder each
 }
-if (Test-Path $evidence) { Get-ChildItem $evidence -Recurse -File | Remove-Item -Force }  # drop masked files left by an earlier same-day run
 foreach ($folder in @("", "athena", "facts")) {                         # masked evidence folders
     New-Item -ItemType Directory -Force -Path "$evidence/$folder" | Out-Null  # created empty, filled only by the masker
 }
@@ -29,6 +31,7 @@ $visitId = $null                                                        # the re
 $visitMonth = $null                                                     # visit A's source month, set at step 8
 $currentStep = 0                                                        # the step running now, named in every failure
 $firstMonths = @("2008-04", "2008-05", "2008-06", "2008-07")            # the months run 1 processes
+$silverTables = @("silver_clicks", "silver_clicks_rejected")            # the two Silver tables visit A is deleted from (snapshots, time travel)
 
 # ── Helpers: keep the visit ID out of messages and save small facts ─
 function Hide-Visit([string]$Text) {                                    # replace the real visit ID (and the local TEMP path) in a message
@@ -106,7 +109,22 @@ function Get-InputFileCount($Report) {                                  # Bronze
 }
 
 # ── Helpers: Athena runner with placeholder filling ───────────
+function Remove-SqlCommentLines([string]$Text) {                        # drop full-line -- comments (the repo SQL headers hold non-ASCII box-drawing characters)
+    $kept = @($Text -split "\r?\n" | Where-Object { $_ -notmatch "^\s*--" })  # a line whose first non-space characters are -- ; a -- later in a line stays
+    return ($kept -join "`n")                                           # the statement lines, unchanged
+}
+
+function Read-TableSql([string]$SqlPath, [string]$Table) {              # a silver_clicks SQL file pointed at another Silver table
+    $text = Get-Content $SqlPath -Raw                                   # the reviewed SQL (written for silver_clicks)
+    if ($Table -eq "silver_clicks") { return $text }                    # nothing to change
+    if ($Table -notin $silverTables) { throw "$SqlPath can only be pointed at $($silverTables -join ' or '), not $Table" }  # only the two Silver tables
+    $pattern = "(?<![A-Za-z_])silver_clicks(?![A-Za-z_])"               # the table name as a whole word (not silver_clicks_rejected)
+    if (-not [regex]::IsMatch($text, $pattern)) { throw "$SqlPath does not name silver_clicks, so it cannot be pointed at $Table" }  # the file changed shape
+    return [regex]::Replace($text, $pattern, $Table)                    # same query, other table (TEMP copy only)
+}
+
 function Invoke-AthenaSql([string]$Name, [string]$Text, [hashtable]$Parameters = @{}, [string]$Source = "inline SQL", [switch]$AllowFailure) {  # run one statement, save its raw result to TEMP
+    $Text = Remove-SqlCommentLines $Text                                # full-line comments never reach Athena
     foreach ($key in $Parameters.Keys) {                                # each {placeholder} the SQL uses
         $Text = $Text.Replace("{$key}", [string]$Parameters[$key])      # fill it in (TEMP copy only)
     }
@@ -116,8 +134,15 @@ function Invoke-AthenaSql([string]$Name, [string]$Text, [hashtable]$Parameters =
     $sqlPath = "$work/sql/$Name.sql"                                    # the filled-in SQL can hold the visit ID or bucket, so TEMP only
     Set-Content -Path $sqlPath -Value $Text -NoNewline                  # UTF-8 without BOM in PowerShell 7
     $PSNativeCommandUseErrorActionPreference = $false                   # read the start call's exit code by hand (scoped to this function)
-    $startOutput = aws athena start-query-execution --query-string "file://$sqlPath" --work-group $out.WorkGroupName --query-execution-context "Database=$($out.DatabaseName)" --region $Region --query QueryExecutionId --output text 2>&1 | Out-String  # start it, keep stderr
-    $startFailed = $LASTEXITCODE -ne 0                                  # Athena refused the statement outright
+    $previousEncoding = $env:AWS_CLI_FILE_ENCODING                      # the owner's own setting (usually unset), restored below
+    $env:AWS_CLI_FILE_ENCODING = "UTF-8"                                # CLI v2 reads file:// with the locale encoding (cp1252 on Windows) unless told
+    try {                                                               # restore the encoding setting whatever happens
+        $startOutput = aws athena start-query-execution --query-string "file://$sqlPath" --work-group $out.WorkGroupName --query-execution-context "Database=$($out.DatabaseName)" --region $Region --query QueryExecutionId --output text 2>&1 | Out-String  # start it, keep stderr
+        $startFailed = $LASTEXITCODE -ne 0                              # Athena refused the statement outright
+    }
+    finally {                                                           # runs after the start call, success or not
+        $env:AWS_CLI_FILE_ENCODING = $previousEncoding                  # back to the owner's setting ($null removes it)
+    }
     $PSNativeCommandUseErrorActionPreference = $true                    # strict again for the polling calls
     if ($startFailed) {                                                 # no query ID exists
         $reason = Hide-Visit $startOutput.Trim()                       # the CLI message, visit ID hidden
@@ -185,24 +210,62 @@ function Read-AthenaRows($Query, [string[]]$Columns) {                  # rows o
 function Read-AthenaPairs($Query, [string]$KeyColumn, [string]$ValueColumn, [switch]$AsDouble) {  # first column -> number
     $pairs = [ordered]@{}                                               # e.g. 2008-04 -> 3
     foreach ($row in @(Read-AthenaRows $Query @($KeyColumn, $ValueColumn))) {  # each data row
-        $pairs[[string]$row.$KeyColumn] = if ($AsDouble) { [double]$row.$ValueColumn } else { [long]$row.$ValueColumn }  # invariant-culture number
+        $value = $row.$ValueColumn                                      # the number as text, or $null for NULL
+        if ($null -eq $value) { throw "$($Query.source) returned NULL in column '$ValueColumn' for '$($row.$KeyColumn)' (raw result: $($Query.result_path)); a NULL is never counted as 0" }  # stop instead of a silent 0
+        $pairs[[string]$row.$KeyColumn] = if ($AsDouble) { [double]$value } else { [long]$value }  # invariant-culture number
     }
     return $pairs                                                       # a dictionary is returned whole, not enumerated
 }
 
-function Get-FormatVersions([int]$Step) {                               # Iceberg format version of the three tables (SQL 09)
-    $versions = [ordered]@{}                                            # table -> version
+# ── Helpers: Iceberg format version (SHOW TBLPROPERTIES first, then metadata.json) ─
+function Get-FormatVersions([int]$Step) {                               # Iceberg format version of the three tables, with where it was read
+    $versions = [ordered]@{}                                            # table -> {format_version, source}
     foreach ($table in @("silver_clicks", "silver_clicks_rejected", "silver_deleted_visits")) {  # every Iceberg table
-        $query = Invoke-AthenaFile "sql/validation/t1b/09_format_version.sql" -Name "09_format_version_step$($Step)_$table" -Parameters @{ table = $table }  # SHOW TBLPROPERTIES
-        $raw = Get-Content $query.result_path -Raw | ConvertFrom-Json   # its saved raw result (shape unverified, so read as text)
-        $lines = @($raw.ResultSet.Rows | ForEach-Object { (@($_.Data) | ForEach-Object { $_.VarCharValue }) -join "`t" })  # every row as tab-separated text
-        $found = [regex]::Match(($lines -join "`n"), "format-version\W*(\d+)")  # e.g. "format-version<tab>2"
-        if (-not $found.Success) {                                      # the property is not in the output
-            throw "sql/validation/t1b/09_format_version.sql did not report format-version for $table (raw result: $($query.result_path)). Fallback named in SQL 09: read format-version from the table's current metadata.json in S3 (newest file under the table's metadata/ folder; look for `"format-version`" : 2), then fix SQL 09 or this parser and rerun."  # hint only, no automatic S3 read
+        $version = $null                                                # not known yet
+        $source = $null                                                 # where the version was read
+        $query = Invoke-AthenaFile "sql/validation/t1b/09_format_version.sql" -Name "09_format_version_step$($Step)_$table" -Parameters @{ table = $table } -AllowFailure  # SHOW TBLPROPERTIES, first try
+        if ($query.state -eq "SUCCEEDED") {                             # the statement ran
+            $raw = Get-Content $query.result_path -Raw | ConvertFrom-Json  # its saved raw result (shape unverified, so read as text)
+            $lines = @($raw.ResultSet.Rows | ForEach-Object { (@($_.Data) | ForEach-Object { $_.VarCharValue }) -join "`t" })  # every row as tab-separated text
+            $found = [regex]::Match(($lines -join "`n"), "format-version\W*(\d+)")  # e.g. "format-version<tab>2"
+            if ($found.Success) {                                       # Athena listed the property
+                $version = [int]$found.Groups[1].Value                  # the reported version
+                $source = "show_tblproperties"                          # recorded in the fact
+            }
         }
-        $versions[$table] = [int]$found.Groups[1].Value                 # the reported version
+        if ($null -eq $version) {                                       # Athena shows only its supported properties, which may leave format-version out
+            Write-Host "Step $($Step): SHOW TBLPROPERTIES did not report format-version for $table; reading the table's current metadata.json instead."  # progress (no bucket name)
+            $location = [string](aws glue get-table --database-name $out.DatabaseName --name $table --region $Region --query Table.Parameters.metadata_location --output text)  # current metadata file (an S3 URI with the bucket name), TEMP use only
+            $location = $location.Trim()                                # drop the trailing newline
+            if (-not $location -or $location -eq "None") { throw "step $($Step): the Glue table $table has no metadata_location parameter, so its format version cannot be read" }  # no fallback left
+            $metadataPath = "$work/s3/$table-metadata-step$Step.json"   # the downloaded metadata file, TEMP only
+            aws s3 cp $location $metadataPath --region $Region | Out-Null  # copy it down (the console line would name the bucket)
+            $found = [regex]::Match((Get-Content $metadataPath -Raw), '"format-version"\s*:\s*(\d+)')  # e.g. "format-version" : 2
+            if (-not $found.Success) { throw "step $($Step): the metadata.json of $table has no format-version (saved under %TEMP%, s3 folder)" }  # unexpected file
+            $version = [int]$found.Groups[1].Value                      # the version Iceberg itself recorded
+            $source = "metadata.json"                                   # recorded in the fact
+        }
+        $versions[$table] = [ordered]@{ format_version = $version; source = $source }  # no URI or bucket name in the fact
     }
-    return $versions                                                    # {"silver_clicks": 2, ...}
+    return $versions                                                    # {"silver_clicks": {"format_version": 2, "source": "..."}, ...}
+}
+
+# ── Helpers: time travel after VACUUM and files left in S3 ────
+function ConvertTo-TimeTravelFact($Attempt, [string]$Table, [string]$SnapshotId) {  # step-14 time travel result -> fact, or stop
+    if ($Attempt.state -eq "SUCCEEDED") {                               # the old snapshot still answers
+        return [ordered]@{ state = "SUCCEEDED"; row_count = [long]@(Read-AthenaRows $Attempt @("row_count"))[0].row_count }  # recorded honestly; t1b_evidence.py checks judges it
+    }
+    $reason = [string]$Attempt.error                                    # Athena's or the CLI's message, visit ID already hidden
+    $namesSnapshot = ($reason -match "snapshot") -or ($SnapshotId -and $reason.Contains($SnapshotId))  # case-insensitive "snapshot", or the snapshot ID itself
+    if ($Attempt.state -eq "FAILED" -and $namesSnapshot) {              # the expected failure: the snapshot is gone
+        return [ordered]@{ state = "FAILED"; error = $reason }          # the fact checks reads
+    }
+    throw "step 14: time travel on $Table ended $($Attempt.state) for a reason other than a missing or expired snapshot: $reason"  # expired login, throttling, permissions: never counted as proof
+}
+
+function Get-FilesStillInS3([string[]]$Paths, [string]$Label) {        # which of these data files S3 still holds
+    $times = Get-SilverClickObjectTimes $Label                          # every current Silver clicks object
+    return @($Paths | Where-Object { $times.ContainsKey($_) })          # paths still present (none expected after VACUUM)
 }
 
 function Get-MonthFiles([string]$Month, [string]$Label) {               # current data files of one month (SQL 07)
@@ -251,7 +314,7 @@ function Test-VisitInCsv([string]$Path) {                               # does a
 $out = Get-StackOutputs                                                 # stack outputs, used by every helper above
 if ($out.DatabaseName -ne "clickstream_t1") { throw "the DDL names database clickstream_t1 but the stack output is $($out.DatabaseName)" }  # the SQL hard-codes the name
 $record = [ordered]@{ steps_completed = @(); athena = @() }             # everything this window did, raw (masked before it reaches evidence/)
-try {
+try {                                                                   # the main sequence; any failure is recorded below
     & $Python scripts/t1b_evidence.py expected --source $SourceFile --output "$work/expected_before.json"  # local counts with every visit
 
 # ── Step 1: create the three Iceberg tables and capture their format version ─
@@ -324,10 +387,16 @@ try {
     $visitRowsBefore = Read-AthenaPairs (Invoke-AthenaFile "sql/validation/t1b/05_visit_row_counts.sql" -Name "05_visit_row_counts_step8" -Parameters @{ visit_id = $visitId }) "table_name" "row_count"  # visit A per table
     $record.visit_rows_step8 = $visitRowsBefore                         # counts only
     if ($visitRowsBefore["silver_clicks"] -le 0) { throw "visit A has no rows in silver_clicks before the delete" }  # nothing to erase
-    $snapshot = @(Read-AthenaRows (Invoke-AthenaFile "sql/validation/t1b/06_latest_snapshot.sql" -Name "06_latest_snapshot_step8") @("snapshot_id", "committed_at", "operation"))  # $snapshots metadata table
-    if ($snapshot.Count -ne 1) { throw "sql/validation/t1b/06_latest_snapshot.sql returned $($snapshot.Count) rows, expected 1" }  # one latest snapshot
-    $snapshotStep8 = [string]$snapshot[0].snapshot_id                   # the pre-delete snapshot for time travel
-    $record.snapshot_step8 = $snapshot[0]                               # snapshot ID, commit time, operation
+    $snapshotsStep8 = [ordered]@{}                                      # table -> the pre-delete snapshot ID for time travel
+    $record.snapshots_step8 = [ordered]@{}                              # table -> snapshot ID, commit time, operation
+    foreach ($table in $silverTables) {                                 # both Silver tables visit A is deleted from
+        $snapshotSource = "sql/validation/t1b/06_latest_snapshot.sql ($table)"  # named in any failure
+        $snapshot = @(Read-AthenaRows (Invoke-AthenaSql -Name "06_latest_snapshot_step8_$table" -Text (Read-TableSql "sql/validation/t1b/06_latest_snapshot.sql" $table) -Source $snapshotSource) @("snapshot_id", "committed_at", "operation"))  # $snapshots metadata table
+        if ($snapshot.Count -eq 0) { throw "step 8: $snapshotSource returned no snapshot for $table (run 1 should have committed one)" }  # nothing to time travel to
+        if ($snapshot.Count -ne 1) { throw "step 8: $snapshotSource returned $($snapshot.Count) rows for $table, expected 1" }  # one latest snapshot
+        $snapshotsStep8[$table] = [string]$snapshot[0].snapshot_id      # the pre-delete snapshot
+        $record.snapshots_step8[$table] = $snapshot[0]                  # kept in the masked window.json
+    }
     $filesStep8 = @(Get-MonthFiles $visitMonth "step8" | ForEach-Object { $_.path })  # data files of visit A's month
     if ($filesStep8.Count -eq 0) { throw "sql/validation/t1b/07_data_files_for_month.sql found no data files for visit A's month" }  # nothing to compare later
     Save-Fact "files_step8.json" $filesStep8                            # plain list of paths
@@ -346,9 +415,14 @@ try {
 
 # ── Step 10: time travel to the step-8 snapshot (merge-on-read only hides) ─
     $currentStep = 10                                                   # named in any failure
-    $travelParameters = @{ snapshot_id = $snapshotStep8; visit_id = $visitId }  # placeholders for SQL 08
-    $travel10 = @(Read-AthenaRows (Invoke-AthenaFile "sql/validation/t1b/08_time_travel.sql" -Name "08_time_travel_step10" -Parameters $travelParameters) @("row_count"))  # old snapshot still answers
-    Save-Fact "time_travel_step10.json" ([ordered]@{ row_count = [long]$travel10[0].row_count })  # expected more than 0
+    $travel10 = [ordered]@{}                                            # table -> {row_count}
+    foreach ($table in $silverTables) {                                 # both Silver tables
+        $travelParameters = @{ snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
+        $travelRows = @(Read-AthenaRows (Invoke-AthenaSql -Name "08_time_travel_step10_$table" -Text (Read-TableSql "sql/validation/t1b/08_time_travel.sql" $table) -Parameters $travelParameters -Source "sql/validation/t1b/08_time_travel.sql ($table)") @("row_count"))  # the old snapshot still answers
+        if ($travelRows.Count -ne 1) { throw "step 10: sql/validation/t1b/08_time_travel.sql ($table) returned $($travelRows.Count) rows, expected 1" }  # COUNT(*) gives one row
+        $travel10[$table] = [ordered]@{ row_count = [long]$travelRows[0].row_count }  # silver_clicks more than 0; rejects 0 (visit A is clean)
+    }
+    Save-Fact "time_travel_step10.json" $travel10                       # per-table counts
     Complete-Step 10 "time travel still returns visit A"                # progress
 
 # ── Step 11: OPTIMIZE visit A's month on both Silver tables ───
@@ -368,17 +442,18 @@ try {
     foreach ($table in @("silver_clicks", "silver_clicks_rejected", "silver_deleted_visits")) {  # every Iceberg table
         Invoke-AthenaSql -Name "vacuum_$table" -Text "VACUUM clickstream_t1.$table" | Out-Null  # expire old snapshots, remove unused files
     }
+    Save-Fact "files_step8_left_after_vacuum.json" @(Get-FilesStillInS3 $filesStep8 "after_vacuum")  # spec risk 3: VACUUM can succeed without deleting; the S3 listing decides (expected [])
     Complete-Step 13 "VACUUM done"                                      # progress
 
 # ── Step 14: time travel again (now expected to fail) and format version again ─
     $currentStep = 14                                                   # named in any failure
-    $travel14 = Invoke-AthenaFile "sql/validation/t1b/08_time_travel.sql" -Name "08_time_travel_step14" -Parameters $travelParameters -AllowFailure  # a failure is the expected result
-    if ($travel14.state -eq "SUCCEEDED") {                              # the old snapshot still answers (check will fail)
-        Save-Fact "time_travel_step14.json" ([ordered]@{ row_count = [long]@(Read-AthenaRows $travel14 @("row_count"))[0].row_count })  # recorded honestly
+    $travel14 = [ordered]@{}                                            # table -> {state, error} or {state, row_count}
+    foreach ($table in $silverTables) {                                 # both Silver tables
+        $travelParameters = @{ snapshot_id = $snapshotsStep8[$table]; visit_id = $visitId }  # placeholders for SQL 08
+        $attempt = Invoke-AthenaSql -Name "08_time_travel_step14_$table" -Text (Read-TableSql "sql/validation/t1b/08_time_travel.sql" $table) -Parameters $travelParameters -Source "sql/validation/t1b/08_time_travel.sql ($table)" -AllowFailure  # a snapshot failure is the expected result
+        $travel14[$table] = ConvertTo-TimeTravelFact $attempt $table $snapshotsStep8[$table]  # only a FAILED state naming the snapshot counts; anything else stops here
     }
-    else {                                                              # snapshot expired, as expected
-        Save-Fact "time_travel_step14.json" ([ordered]@{ error = [string]$travel14.error })  # Athena's reason, visit ID hidden
-    }
+    Save-Fact "time_travel_step14.json" $travel14                       # per-table results
     Save-Fact "format_version_step14.json" (Get-FormatVersions 14)     # still 2 on all three
     Complete-Step 14 "time travel after VACUUM recorded"                # progress
 
@@ -424,11 +499,11 @@ try {
     Save-Fact "final_counts.json" ([ordered]@{ bronze_rows_by_month = $bronzeRows; silver_clicks_by_month = $silverFinal; gold_visits_by_month = $goldVisits; rejected_rows = [ordered]@{ all = $rejectedTotal } })  # same keys as expected_counts
     Complete-Step 18 "validation SQL done"                              # progress
 }
-catch {
+catch {                                                                 # a step failed
     $record.failure = "step $($currentStep): $(Hide-Visit $_.Exception.Message)"  # what went wrong, kept in the masked evidence
     throw "Step $currentStep failed: $(Hide-Visit $_.Exception.Message)"  # still fail the script (visit ID hidden), once the finally block below has run
 }
-finally {
+finally {                                                               # always save evidence, also after an early stop
     # ── Finish: checks, then mask every file into evidence/ (also after an early stop) ─
     $PSNativeCommandUseErrorActionPreference = $false                   # from here every exit code is read by hand so nothing masks the real failure
     $finishProblems = @()                                               # problems found while saving evidence
@@ -453,6 +528,7 @@ finally {
         else { & $Python scripts/t1b_evidence.py mask $pair.from $pair.to }  # no visit picked yet: account, bucket, version masking only
         if ($LASTEXITCODE -ne 0) { $finishProblems += "masking $([System.IO.Path]::GetFileName($pair.from)) failed" }  # note it, keep going
     }
+    if ($finishProblems.Count -gt 0) { Write-Host "Evidence saving problems: $($finishProblems -join '; ')" }  # shown even when an earlier step's error is the one thrown
     $PSNativeCommandUseErrorActionPreference = $true                    # restore the strict setting
 }
 if ($finishProblems.Count -gt 0) { throw "evidence saving problems: $($finishProblems -join '; ')" }  # only reached when the main sequence succeeded

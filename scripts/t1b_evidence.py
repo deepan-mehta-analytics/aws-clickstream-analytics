@@ -2,15 +2,19 @@
 
 The window script saves one small JSON file per fact in an evidence folder; `t1b_checks` reads them.
 Files (all plain JSON, written by the window script from the raw Athena / S3 output):
-  format_version_step1.json, format_version_step14.json   {"silver_clicks": 2, "silver_clicks_rejected": 2, "silver_deleted_visits": 2}
+  format_version_step1.json, format_version_step14.json   {"silver_clicks": {"format_version": 2, "source": "show_tblproperties"
+                                                          or "metadata.json"}, ... one entry per Iceberg table}
   run2_input_files.json, run3_input_files.json            {"input_files": 1}
   files_before_migration.json, files_after_migration.json [{"path", "size", "last_modified"}, ...] (April-July data files)
   weekend_null_share.json                                 {"2008-04": 1.0, ..., "2008-08": 0.0}
   weekend_mismatches.json                                 {"mismatched_rows": 0} (August values vs the local twin)
   before_delete_counts.json, after_delete_counts.json     {"silver_clicks_by_month": {...}}; after also has
                                                           "visit_rows_in_silver_clicks" and "rejects_rows_deleted"
-  time_travel_step10.json, time_travel_step14.json        {"row_count": n} or {"error": "..."}
+  time_travel_step10.json                                 {"silver_clicks": {"row_count": n}, "silver_clicks_rejected": {"row_count": n}}
+  time_travel_step14.json                                 {"silver_clicks": {"state": "FAILED", "error": "..."}, "silver_clicks_rejected": ...};
+                                                          an entry may instead be {"state": "SUCCEEDED", "row_count": n}
   files_step8.json, files_step12.json                     ["s3 path", ...] (data files of the visit's month)
+  files_step8_left_after_vacuum.json                      ["s3 path", ...] (step-8 files S3 still lists after VACUUM; expected [])
   bronze_versions_after.json                              {"version_count": 1, "contains_visit": false}
   gold_after_run3.json                                    {"visits_by_month": {...}, "clicks_by_month": {...}}
   final_counts.json                                       same keys as `expected_counts`
@@ -49,6 +53,7 @@ DEFAULT_SEED = 20261020                                                 # fixed 
 EXCLUDED_MONTH = "2008-08"                                              # August is never touched by the delete evidence
 VISIT_LABEL = "visit A"                                                 # public label; the real ID never appears
 TABLE_NAMES = ["silver_clicks", "silver_clicks_rejected", "silver_deleted_visits"]  # the three Iceberg tables
+FORMAT_VERSION_SOURCES = {"show_tblproperties", "metadata.json"}      # where the window may read the format version
 S3_VERSION_ID = re.compile(                                             # S3 version ID shape: 32 characters with letters and digits
     r"(?<![A-Za-z0-9._+/-])(?=[A-Za-z0-9._+]*[0-9])(?=[A-Za-z0-9._+]*[A-Za-z])[A-Za-z0-9._+]{32}(?![A-Za-z0-9._+-])"  # not part of a longer token
 )  # end of the pattern
@@ -140,9 +145,17 @@ def t1b_checks(evidence_dir: Path, expected_before: dict, expected_after: dict) 
             data = data.get(key) if isinstance(data, dict) else None    # None when absent
         return data                                                     # value or None
 
+    def versions(fact):                                                 # {"table": version} from a format-version fact
+        if not isinstance(fact, dict):                                  # missing or malformed file
+            return None                                                 # fails the check
+        return {name: field(fact, name, "format_version") if field(fact, name, "source") in FORMAT_VERSION_SOURCES else None for name in TABLE_NAMES}  # an unknown source counts as missing
+
+    def expired(entry) -> bool:                                         # a step-14 time travel that failed on the snapshot
+        return isinstance(entry, dict) and entry.get("state") == "FAILED" and bool(entry.get("error")) and "row_count" not in entry  # only a recorded FAILED state counts
+
     all_v2 = {name: 2 for name in TABLE_NAMES}                          # format version 2 on all three tables
-    add("format_version_step1", "format version 2 on all three tables at step 1", all_v2, load("format_version_step1.json"))  # spec line 1
-    add("format_version_step14", "format version 2 on all three tables at step 14", all_v2, load("format_version_step14.json"))  # spec line 1
+    add("format_version_step1", "format version 2 on all three tables at step 1", all_v2, versions(load("format_version_step1.json")))  # spec line 1
+    add("format_version_step14", "format version 2 on all three tables at step 14", all_v2, versions(load("format_version_step14.json")))  # spec line 1
     add("run2_input_files", "run 2 read exactly 1 input file", 1, field(load("run2_input_files.json"), "input_files"))  # bookmark
     add("files_unchanged_across_migration", "April-July data files identical before and after the migration", load("files_before_migration.json") or "missing", load("files_after_migration.json"))  # path, size, time
     share = load("weekend_null_share.json")                            # NULL share per month
@@ -154,11 +167,16 @@ def t1b_checks(evidence_dir: Path, expected_before: dict, expected_after: dict) 
     add("rejects_delete_zero", "rows the rejects DELETE affected (the real data has no rejects)", 0, field(load("after_delete_counts.json"), "rejects_rows_deleted"))  # step 9
     add("other_counts_unchanged", "Silver clicks per month after the delete equal the local run minus visit A", expected_after["silver_clicks_by_month"], field(load("after_delete_counts.json"), "silver_clicks_by_month"))  # step 9
     travel10 = load("time_travel_step10.json")                          # step 10 result
-    add("time_travel_returns_visit", "step 10 time travel still returns rows of visit A (more than 0)", True, None if travel10 is None else (field(travel10, "row_count") or 0) > 0)  # merge-on-read only hides
+    add("time_travel_returns_visit", "step 10 time travel on silver_clicks still returns rows of visit A (more than 0)", True, None if travel10 is None else (field(travel10, "silver_clicks", "row_count") or 0) > 0)  # merge-on-read only hides
+    add("time_travel_rejected_step10", "step 10 time travel on silver_clicks_rejected answers with 0 rows of visit A (a clean visit)", 0, field(travel10, "silver_clicks_rejected", "row_count"))  # the query ran at the step-8 snapshot
     before_files, after_files = load("files_step8.json"), load("files_step12.json")  # data file lists
     add("files_replaced", "step 12 data files share no path with step 8's list", True, None if not before_files or after_files is None else not (set(before_files) & set(after_files)))  # OPTIMIZE rewrote them
-    travel14 = load("time_travel_step14.json")                          # step 14 result
-    add("time_travel_fails", "step 14 time travel errors (snapshot expired)", True, None if travel14 is None else bool(field(travel14, "error")) and "row_count" not in travel14)  # VACUUM expired it
+    add("files_step8_deleted", "step 8 data files still in S3 after VACUUM (the file list decides, not the query status)", [], load("files_step8_left_after_vacuum.json"))  # spec section 6 risk 3
+    travel14 = load("time_travel_step14.json")                          # step 14 result per table
+    add("time_travel_fails", "step 14 time travel on silver_clicks fails with state FAILED (snapshot expired)", True, None if travel14 is None else expired(field(travel14, "silver_clicks")))  # VACUUM expired it
+    rejected14 = field(travel14, "silver_clicks_rejected")              # the rejects table's step-14 result
+    rejected14_ok = expired(rejected14) or (isinstance(rejected14, dict) and rejected14.get("state") == "SUCCEEDED" and rejected14.get("row_count") == 0)  # its step-8 snapshot may still be the current one
+    add("time_travel_rejected_step14", "step 14 time travel on silver_clicks_rejected fails (snapshot expired) or returns 0 rows of visit A", True, None if travel14 is None else rejected14_ok)  # visit A never had rejects
     add("bronze_clean", "Bronze key has exactly one version and no visit A", {"version_count": 1, "contains_visit": False}, load("bronze_versions_after.json"))  # step 15
     add("run3_input_files", "run 3 read exactly 1 input file", 1, field(load("run3_input_files.json"), "input_files"))  # bookmark reprocessed the rewritten file
     gold = load("gold_after_run3.json")                                 # Gold after run 3

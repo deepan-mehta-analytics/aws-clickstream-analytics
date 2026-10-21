@@ -32,4 +32,5 @@ the raw S3 version listings. Every file it writes under `evidence/t1b/<date>/`
 (`window.json`, `expected_*.json`, `comparison.json`, `athena/`, `facts/`)
 goes through `t1b_evidence.py mask --visit-file`, so the visit appears only as
 "visit A" and no version ID, account ID or bucket name is kept. The console
-shows the label, never the ID.
+shows the label, never the ID. If `evidence/t1b/<date>/` already exists, the
+window refuses to start: move that folder aside first (it is never deleted).

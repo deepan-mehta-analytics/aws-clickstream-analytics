@@ -53,10 +53,10 @@ def test_mask_visit_is_whole_number_only():                             # 123 in
 def make_evidence(folder: Path, break_one: bool) -> tuple[dict, dict]:  # write a passing evidence folder
     before = {"bronze_rows_by_month": {"2008-04": 10}, "silver_clicks_by_month": {"2008-04": 10}, "gold_visits_by_month": {"2008-04": 4}, "rejected_rows": {"all": 0}}  # local, all visits
     after = {"bronze_rows_by_month": {"2008-04": 7}, "silver_clicks_by_month": {"2008-04": 7}, "gold_visits_by_month": {"2008-04": 3}, "rejected_rows": {"all": 0}}  # local, minus visit A
-    tables = {"silver_clicks": 2, "silver_clicks_rejected": 2, "silver_deleted_visits": 2}  # format version per table
+    tables = {name: {"format_version": 2, "source": "metadata.json"} for name in evidence.TABLE_NAMES}  # format version per table, read from metadata.json
     files = {                                                           # every evidence file the checks read
         "format_version_step1.json": tables,                            # at table creation
-        "format_version_step14.json": tables,                           # after VACUUM
+        "format_version_step14.json": {**tables, "silver_clicks": {"format_version": 2, "source": "show_tblproperties"}},  # after VACUUM, one table read the other way
         "run2_input_files.json": {"input_files": 1},                    # bookmark
         "files_before_migration.json": [{"path": "a", "size": 1, "last_modified": "t"}],  # April-July files
         "files_after_migration.json": [{"path": "a", "size": 1, "last_modified": "t"}],  # identical
@@ -64,9 +64,10 @@ def make_evidence(folder: Path, break_one: bool) -> tuple[dict, dict]:  # write 
         "weekend_mismatches.json": {"mismatched_rows": 0},              # August values vs local twin
         "before_delete_counts.json": {"silver_clicks_by_month": before["silver_clicks_by_month"]},  # step 8
         "after_delete_counts.json": {"visit_rows_in_silver_clicks": 0, "rejects_rows_deleted": 0, "silver_clicks_by_month": after["silver_clicks_by_month"]},  # step 9
-        "time_travel_step10.json": {"row_count": 3},                    # still readable
+        "time_travel_step10.json": {"silver_clicks": {"row_count": 3}, "silver_clicks_rejected": {"row_count": 0}},  # still readable
         "files_step8.json": ["old1"], "files_step12.json": ["new1"],    # disjoint path lists
-        "time_travel_step14.json": {"error": "snapshot not found"},     # expired
+        "files_step8_left_after_vacuum.json": [],                       # VACUUM really deleted them
+        "time_travel_step14.json": {"silver_clicks": {"state": "FAILED", "error": "snapshot not found"}, "silver_clicks_rejected": {"state": "FAILED", "error": "Snapshot not found"}},  # expired
         "bronze_versions_after.json": {"version_count": 1, "contains_visit": False},  # erased
         "run3_input_files.json": {"input_files": 1},                    # bookmark
         "gold_after_run3.json": {"visits_by_month": after["gold_visits_by_month"], "clicks_by_month": after["silver_clicks_by_month"]},  # Gold
@@ -137,6 +138,53 @@ def test_files_replaced_fails_on_empty_step8_list(tmp_path):            # nothin
     before, after = make_evidence(tmp_path, break_one=False)            # good folder
     (tmp_path / "files_step8.json").write_text("[]", encoding="utf-8")  # empty list
     assert evidence.t1b_checks(tmp_path, before, after)["files_replaced"]["pass"] is False  # fails
+
+
+def write_json(path: Path, content) -> None:                            # overwrite one evidence file
+    path.write_text(json.dumps(content), encoding="utf-8")              # saved JSON
+
+
+def test_files_step8_deleted_needs_an_empty_s3_listing(tmp_path):       # spec risk 3: the file list decides, not the VACUUM status
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    assert evidence.t1b_checks(tmp_path, before, after)["files_step8_deleted"]["pass"] is True  # [] passes
+    write_json(tmp_path / "files_step8_left_after_vacuum.json", ["old1"])  # one step-8 file survived VACUUM
+    assert evidence.t1b_checks(tmp_path, before, after)["files_step8_deleted"]["pass"] is False  # fails
+    (tmp_path / "files_step8_left_after_vacuum.json").unlink()          # never listed
+    assert evidence.t1b_checks(tmp_path, before, after)["files_step8_deleted"]["pass"] is False  # missing is not a pass
+
+
+def test_files_left_after_vacuum_are_masked_like_other_file_lists():     # the bucket name never reaches evidence
+    bucket = "clickstream-t1-lake-" + "silverbucket-" + "abc123xyz"     # generated-style name built at runtime
+    masked = evidence.mask_everything([f"s3://{bucket}/clicks/data/click_month=2008-05/file.parquet"], 4321)  # one leftover path
+    assert bucket not in json.dumps(masked) and masked == ["s3://<silver-bucket>/clicks/data/click_month=2008-05/file.parquet"]  # role kept, name gone
+
+
+def test_time_travel_fails_requires_a_failed_state(tmp_path):           # a login or CLI error is not proof
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    for wrong in ({"state": "NOT_STARTED", "error": "token expired"}, {"error": "snapshot not found"}, {"state": "SUCCEEDED", "row_count": 3}, {"state": "FAILED", "error": ""}):  # each not-a-proof shape
+        write_json(tmp_path / "time_travel_step14.json", {"silver_clicks": wrong, "silver_clicks_rejected": {"state": "FAILED", "error": "snapshot"}})  # replace the silver_clicks entry
+        assert evidence.t1b_checks(tmp_path, before, after)["time_travel_fails"]["pass"] is False, wrong  # fails
+
+
+def test_rejected_time_travel_accepts_expired_or_zero_rows(tmp_path):   # the rejects table may keep its step-8 snapshot
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    expired = {"state": "FAILED", "error": "snapshot not found"}        # silver_clicks entry
+    for entry, expected in (({"state": "SUCCEEDED", "row_count": 0}, True), ({"state": "SUCCEEDED", "row_count": 1}, False), ({"state": "NOT_STARTED", "error": "x"}, False)):  # entry -> pass
+        write_json(tmp_path / "time_travel_step14.json", {"silver_clicks": expired, "silver_clicks_rejected": entry})  # replace the rejects entry
+        assert evidence.t1b_checks(tmp_path, before, after)["time_travel_rejected_step14"]["pass"] is expected, entry  # judged
+    write_json(tmp_path / "time_travel_step10.json", {"silver_clicks": {"row_count": 3}})  # rejects never time-travelled
+    assert evidence.t1b_checks(tmp_path, before, after)["time_travel_rejected_step10"]["pass"] is False  # missing is not a pass
+
+
+def test_format_version_checks_the_version_and_its_source(tmp_path):    # SHOW TBLPROPERTIES or metadata.json, version 2
+    before, after = make_evidence(tmp_path, break_one=False)            # good folder
+    good = {name: {"format_version": 2, "source": "metadata.json"} for name in evidence.TABLE_NAMES}  # passing shape
+    write_json(tmp_path / "format_version_step1.json", {**good, "silver_clicks": {"format_version": 1, "source": "metadata.json"}})  # wrong version
+    assert evidence.t1b_checks(tmp_path, before, after)["format_version_step1"]["pass"] is False  # fails
+    write_json(tmp_path / "format_version_step1.json", {**good, "silver_clicks": {"format_version": 2, "source": "guess"}})  # unknown source
+    assert evidence.t1b_checks(tmp_path, before, after)["format_version_step1"]["pass"] is False  # fails
+    write_json(tmp_path / "format_version_step1.json", {name: 2 for name in evidence.TABLE_NAMES})  # the old flat shape has no source
+    assert evidence.t1b_checks(tmp_path, before, after)["format_version_step1"]["pass"] is False  # fails
 
 
 def test_expected_counts_without_keeps_other_bytes(tmp_path):           # raw line filtering, CRLF kept
