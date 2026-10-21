@@ -8,8 +8,8 @@ named `glue_catalog`, so the job code is the same as on AWS Glue).
 `data/README.md`. It is skipped locally unless the file is downloaded, and CI
 downloads it and verifies its MD5.
 
-Count: **219 tests pass on Linux CI** (2026-10-21). On Windows 206 run and 13
-are skipped: Spark file writes need `winutils` there, so the 8 Iceberg tests,
+Count: **221 tests pass on Linux CI** (2026-10-21). On Windows 207 run and 14
+are skipped: Spark file writes need `winutils` there, so the 9 Iceberg tests,
 4 lake-storage tests and 1 session write test run only on Linux CI.
 
 The T1b files: `test_iceberg_sql.py` (DDL and migration against the code),
