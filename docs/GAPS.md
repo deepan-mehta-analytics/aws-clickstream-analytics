@@ -43,9 +43,10 @@ owner-run window.
 | G-19 | The account can create AWS Glue jobs in `ap-south-1` | Whether Glue is enabled for this account | Second T1a deploy, 2026-10-05: the Glue job failed with "Account … is denied access (Service: Glue, Status Code: 400)" while deploying as an administrator; the message names the account, not an IAM action. Public reports of the same message on newer accounts say AWS Support must lift it | Stack rolled back; the owner deletes it and opens an AWS Support case (Account and billing) asking AWS to enable Glue. The T1a window is paused until AWS confirms; rerun from `sam build`. **Resolved 2026-10-19:** AWS Support enabled Glue; the Glue job was created during the stack deploy and ran twice | ✅ Resolved |
 
 Rows G-20 to G-25 were added on 2026-10-21 from the T1b design
-([ADR-0006](adr/0006-iceberg-silver.md), proposed) and its code review; all
-are settled by the T1b owner window, and each one stops the window at a named
-step if the assumption is wrong.
+([ADR-0006](adr/0006-iceberg-silver.md), proposed) and its code review; G-26
+was added the same day after window attempt 1 failed. All are settled by the
+T1b owner window, and each one stops the window at a named step if the
+assumption is wrong.
 
 | ID | Assumption | What to verify | How | Decision | Status |
 |---|---|---|---|---|---|
@@ -55,6 +56,7 @@ step if the assumption is wrong.
 | G-23 | Athena's error for time travel to an expired snapshot mentions the snapshot | The error text at step 14 | The window accepts only a `FAILED` query whose error names the snapshot (or its ID) | Anything else (expired login, throttling, permissions) stops the window instead of counting as proof | ⏳ Open |
 | G-24 | `VACUUM` deletes the step-8 data files, not just the snapshots | The S3 file list after `VACUUM` | [Athena VACUUM](https://docs.aws.amazon.com/athena/latest/ug/vacuum-statement.html): without `s3:DeleteObject` "the VACUUM query will succeed, but the files will not be deleted" (read 2026-10-20) | The window lists the files before and after; the check expects none of step 8's files left. The rejects table may keep its last snapshot (visit A has no rejects, so no new commit there), which the check allows | ⏳ Open |
 | G-25 | `CAST(current_timestamp AS timestamp(6))` inserts into an Iceberg `timestamp` column | The step-9 `INSERT` into `silver_deleted_visits` | [Athena engine v3 notes](https://docs.aws.amazon.com/athena/latest/ug/engine-versions-reference-0003.html) document precision 6 only as the fix for `CREATE TABLE AS` | If Athena refuses it, step 9 stops with the query ID | ⏳ Open |
+| G-26 | Glue's Iceberg 1.11.0 can write to tables Athena creates with its default properties | Window attempt 1, 2026-10-21: Glue run 1 `overwritePartitions` threw `IllegalArgumentException: Property 'write.object-storage.path' has been deprecated and will be removed in 2.0.0, use 'write.data.path' instead` | Athena's `CREATE TABLE` added `write.object-storage.enabled=true` and `write.object-storage.path` on its own (read from the saved `metadata.json`). Iceberg 1.11.0 `LocationProviders.java` (tag `apache-iceberg-1.11.0`, lines 80-92 and 159-170) reads `write.data.path` first and throws for the deprecated key when that is null. [Athena creating Iceberg tables](https://docs.aws.amazon.com/athena/latest/ug/querying-iceberg-creating-tables.html), property `write_data_path_enabled`: "When set to `true`, the Iceberg table is created with the `write.data.path` property instead of the deprecated `write.object-storage.path` property" (read 2026-10-21) | The three DDL files now set `'write_data_path_enabled'='true'` (an eighth property, owner-approved). The local harness missed it because Spark-created tables never carry Athena's object-storage properties; the regression test `test_athena_object_storage_path_is_refused_until_write_data_path_is_set` reproduces the failure and proves the fix. Rerun pending | ⏳ Open |
 
 Add a row whenever research contradicts the brief. Resolved rows stay in the
 table with their decision, so the reasoning remains auditable.

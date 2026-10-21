@@ -13,12 +13,13 @@ CREATE TABLE clickstream_t1.silver_deleted_visits (         -- Iceberg table in 
 LOCATION 's3://{silver_bucket}/deleted_visits/'             -- table folder, never the bucket root
 
 -- ── Table properties ──────────────────────────────────────────────────────
-TBLPROPERTIES (                                             -- Athena allowed Iceberg properties, exactly these seven
+TBLPROPERTIES (                                             -- Athena allowed Iceberg properties, exactly these eight
   'table_type'='ICEBERG',                                   -- Iceberg table (format version 2, Athena default)
   'format'='parquet',                                       -- data file format
   'write_compression'='snappy',                             -- data file compression
   'vacuum_max_snapshot_age_seconds'='60',                   -- VACUUM expires snapshots older than 60 seconds
   'vacuum_min_snapshots_to_keep'='1',                       -- VACUUM always keeps the latest snapshot
   'optimize_rewrite_delete_file_threshold'='1',             -- OPTIMIZE rewrites data files that have even one delete file
-  'optimize_rewrite_data_file_threshold'='1'                -- OPTIMIZE rewrites any data file
+  'optimize_rewrite_data_file_threshold'='1',               -- OPTIMIZE rewrites any data file
+  'write_data_path_enabled'='true'                          -- Athena writes write.data.path, not the old write.object-storage.path that Iceberg 1.9+ refuses
 );                                                          -- end of the table definition

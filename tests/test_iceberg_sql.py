@@ -7,10 +7,11 @@ from clickstream_spark.silver import REJECTED_COLUMNS                   # reject
 from clickstream_spark.sql_files import ddl_columns, ddl_partition, ddl_properties, load_ddl, load_migrations  # code under test
 
 REPO = Path(__file__).resolve().parents[1]                              # repo root
-AGREED_PROPERTIES = {                                                   # the seven pairs from the global constraints
+AGREED_PROPERTIES = {                                                   # the eight pairs: the global constraints' seven plus the owner-approved write_data_path_enabled
     "table_type": "ICEBERG", "format": "parquet", "write_compression": "snappy",  # type, file format, compression
     "vacuum_max_snapshot_age_seconds": "60", "vacuum_min_snapshots_to_keep": "1",  # vacuum settings
     "optimize_rewrite_delete_file_threshold": "1", "optimize_rewrite_data_file_threshold": "1",  # optimize settings
+    "write_data_path_enabled": "true",                                  # Athena writes write.data.path (Iceberg 1.9+ refuses the old key)
 }
 
 
@@ -57,7 +58,12 @@ def test_ddl_partitions():                                              # partit
 
 def test_ddl_properties_are_exactly_the_agreed_set():                   # nothing more, nothing less
     for name, sql in load_ddl().items():                                # every table
-        assert ddl_properties(sql) == AGREED_PROPERTIES, name           # exactly the seven pairs
+        assert ddl_properties(sql) == AGREED_PROPERTIES, name           # exactly the eight pairs
+
+
+def test_every_ddl_makes_athena_write_the_data_path_property():         # 2026-10-21 window failure: Iceberg 1.11 refuses write.object-storage.path
+    for name, sql in load_ddl().items():                                # every table
+        assert ddl_properties(sql).get("write_data_path_enabled") == "true", name  # without it Glue's overwritePartitions throws
 
 
 def test_ddl_locations_are_folders_not_the_bucket_root():              # each table has its own folder

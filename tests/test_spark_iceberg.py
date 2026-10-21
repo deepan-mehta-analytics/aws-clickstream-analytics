@@ -49,6 +49,18 @@ def test_format_version_2_passes_and_3_is_refused(spark):              # decisio
         check_format_version(spark, newer.clicks)                       # refused
 
 
+# ── Athena-created table properties (window attempt 1, 2026-10-21) ─
+def test_athena_object_storage_path_is_refused_until_write_data_path_is_set(spark, tmp_path):  # reproduces the production failure and proves the fix
+    athena_like = f"'format-version'='2', 'write.object-storage.enabled'='true', 'write.object-storage.path'='{tmp_path / 'old'}/data'"  # what Athena adds on its own
+    broken = create_silver_tables(spark, database="clickstream_athena_old_path", properties=athena_like)  # tables as Athena creates them
+    with pytest.raises(Exception, match=r"write\.data\.path"):         # Iceberg 1.11 throws and names the new key (Spark may wrap it)
+        run(spark, APRIL, tmp_path, broken)                             # the write that failed in Glue
+    fixed_properties = f"{athena_like}, 'write.data.path'='{tmp_path / 'new'}/data'"  # what write_data_path_enabled=true produces
+    fixed = create_silver_tables(spark, database="clickstream_athena_new_path", properties=fixed_properties)  # tables with the new key
+    run(spark, APRIL, tmp_path, fixed)                                  # the same write now succeeds
+    assert spark.table(fixed.clicks).count() == 10                      # the rows are readable
+
+
 # ── Month overwrite ───────────────────────────────────────────
 def test_overwrite_replaces_only_written_months(spark, tmp_path):      # decision B1: rerun safety
     tables = create_silver_tables(spark)                                # fresh tables
