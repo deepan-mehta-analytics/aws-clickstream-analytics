@@ -49,3 +49,20 @@ jobs:                                                     # jobs run in parallel
           unzip -o -q data/uci553.zip -d data/            # extract the CSV and codebook
       - name: Test                                        # unit tests plus the full-file reconciliation
         run: python -m pytest -v                          # run the suite
+
+  # ── Runner pin guard ────────────────────────────────────────────────────
+  # ubuntu-latest moved from 24.04 to 26.04 in Oct-Nov 2026 and broke an R
+  # build in another repo. Every job must name an exact image; this job fails
+  # if any workflow uses a moving "-latest" runner label.
+  runner-pin-guard:
+    name: Runner pin guard                                   # label shown in the Actions UI
+    runs-on: ubuntu-24.04        # pinned: proven on 24.04, 26.04 not yet trialled; never ubuntu-latest (guard job)
+    steps:
+      - uses: actions/checkout@v7                                     # check out the workflow files
+      - name: Fail on moving runner labels                   # the fail-safe check
+        run: |                                               # bash step
+          echo "::notice::Runner image $ImageOS $ImageVersion"   # record which image ran
+          if grep -rnE '^[^#]*(ubuntu|windows|macos)-latest' .github/workflows; then  # any -latest label outside a comment (runs-on or matrix)?
+            echo "::error::Pin runners to an exact image (e.g. ubuntu-24.04), never *-latest"   # explain the failure
+            exit 1                                           # fail the job
+          fi                                                 # end of check
