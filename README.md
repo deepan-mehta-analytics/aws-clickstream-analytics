@@ -522,10 +522,7 @@ without a real run behind it.
 - **Time of day and device are synthetic**: generated from a fixed seed, and labelled `_synthetic` everywhere
 - **The data is from 2008** (April–August), mostly Polish traffic (≈ 81%)
 - **Only tier T1a has run on AWS end to end**: T1b's first window stopped at step 3 and its rerun is pending; the streaming, Redshift and dashboard tiers are designed and priced, not built. Between windows only the small artifacts bucket exists
-- **Infrastructure is deployed per window, not left running**: AWS SAM-extended CloudFormation, one stack per tier, deployed only by the account owner ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md)). The T1a stack ran for one window on 2026-10-19 and was deleted the same day
-- **Encryption uses S3-managed keys (SSE-S3), not a customer-managed KMS key**, to avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
 - **Spark is used for exam coverage and learning, not because the data needs it**: 165,474 rows would normally be Athena SQL or plain Python. An enterprise team would write each transform once, with no pandas copy ([ADR-0005](docs/adr/0005-t1-batch-lake-design.md))
-- **Glue Flex runs can start late**: Flex uses spare capacity, so a run's wait time is not predictable
 - **The cost is read per month, not per window**: Cost Explorer's monthly view covers the whole account, so the T1a figure (≈ ₹3.33) is attributed by service; the window's own Glue evidence over-reported DPU-seconds (291/299) against what was billed (matching 237/226). The T1b window will be read from Cost Explorer's daily view (days in UTC) instead ([`docs/cost-model.md`](docs/cost-model.md))
 - **The first Glue run on AWS failed on a script bug** that local tests could not reach (the `awsglue` library exists only inside Glue): the script asked for an argument Glue reserves for itself. It is fixed and now guarded by a test; the Glue minimum worker count is still unverified ([`docs/GAPS.md`](docs/GAPS.md) G-15)
 - **Encryption in transit is configured but not tested**: the TLS-only bucket policies were deployed, but no plain-HTTP request was tried against them
@@ -533,7 +530,7 @@ without a real run behind it.
 - **T1b window attempt 1 (2026-10-21) stopped at step 3**: Athena's `CREATE TABLE` adds a deprecated `write.object-storage.path` property that Glue's Iceberg 1.11.0 refuses to write with; the local harness missed it because Spark-created tables never carry that property. The DDL now sets `write_data_path_enabled`, a regression test reproduces the failure, the stack was torn down and verified gone, and the fix is proven only by the rerun ([`docs/GAPS.md`](docs/GAPS.md) G-26)
 - **T1b (Iceberg Silver) has not yet completed on AWS**: six assumptions can only be settled by the owner's window ([`docs/GAPS.md`](docs/GAPS.md) G-20 to G-25), among them whether the bookmark re-reads a rewritten Bronze file, whether Athena-created tables record their metadata file location in the Glue Data Catalog, the wording of Athena's error for an expired snapshot, whether `VACUUM` keeps the rejects table's last snapshot, and the timestamp cast in the deleted-visits `INSERT`. Each one stops the window with a named step rather than passing silently. Athena's `SHOW TBLPROPERTIES` does not list `format-version`, so the window reads it from the table's metadata file instead
 - **The T1b weekend check re-derives the rule**: August's `weekend_click` values are checked against "Saturday or Sunday" computed from each `click_date` in Athena, not joined row by row with the local twin's output
-- **8 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), two multi-account skills that need AWS Organizations, and CloudTrail Lake (closed to new customers on 2026-05-31) ([`docs/GAPS.md`](docs/GAPS.md) §3)
+- **8 of the 120 exam-guide skills are out of scope**: Transfer Family (leak risk), SageMaker Unified Studio/Catalog and lineage (no Mumbai price), two multi-account skills that need AWS Organizations (a production option below), and CloudTrail Lake (closed to new customers on 2026-05-31) ([`docs/GAPS.md`](docs/GAPS.md) §3)
 
 ---
 
@@ -548,6 +545,13 @@ without a real run behind it.
 - [ ] T3 + T4: one streaming window (Kinesis → Firehose) with a Redshift Serverless window
 - [ ] T5: Streamlit dashboard, local on Athena and published on a snapshot
 - [x] DEA-C01 skills-coverage map
+
+🏭 **Production options** — designed for, they need ongoing spend. This build runs in time-boxed windows on a personal budget, so these are not built here; each names what an always-on deployment would do instead:
+- **Always-on stacks**: the same SAM / CloudFormation stacks, one per tier, left deployed and released by a CI/CD pipeline, instead of deployed per window by the account owner and deleted the same day (T1a ran 2026-10-19; [ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
+- **Customer-managed KMS keys** for the lake buckets (key rotation and key-level access policies), instead of S3-managed keys (SSE-S3), which avoid a monthly key charge and a 7–30 day key-deletion wait ([ADR-0004](docs/adr/0004-iac-sam-cloudformation.md))
+- **Glue Standard execution class** for predictable start times; this build uses Glue Flex, which runs on spare capacity at a lower price and can start late
+- **A multi-account layout under AWS Organizations**: separate dev and prod accounts with service control policies (SCPs), which also brings the two multi-account exam skills into scope
+- **The designed tiers running continuously**: streaming (Kinesis → Firehose), Redshift Serverless and the dashboard, already designed and priced in [`docs/cost-model.md`](docs/cost-model.md)
 
 ---
 
